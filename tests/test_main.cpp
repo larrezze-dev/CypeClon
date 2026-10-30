@@ -5,10 +5,11 @@
 #include <iostream>
 #include <stdexcept>
 
-// Declaraciones de suites de prueba de Fase 1
+// Declaraciones de suites de prueba de Fases 1 y 2
 void run_math_tests();
 void run_units_tests();
 void run_io_undoredo_tests();
+void run_gui_phase2_tests();
 
 namespace {
 
@@ -68,7 +69,7 @@ void run_memory_and_string_tests() {
 } // namespace
 
 int main() {
-    std::cout << "=== Ejecutando Suite de Pruebas Unitarias del Nucleo CypeClon (Fase 1) ===\n";
+    std::cout << "=== Ejecutando Suite de Pruebas Unitarias CypeClon (Fases 1 y 2) ===\n";
     run_memory_and_string_tests();
     std::cout << "[PASS] cypemem + cypestr\n";
 
@@ -81,7 +82,9 @@ int main() {
     run_io_undoredo_tests();
     std::cout << "[PASS] cypesave (Binario + JSON) + undoredo + Obra + Octree3d\n";
 
-    std::cout << "=== TODAS LAS PRUEBAS DE FASE 1 SUPERADAS CON EXITO ===\n";
+    run_gui_phase2_tests();
+    std::cout << "[PASS] Fase 2 GUI: entograf + componen + panelwin + ribbon + entomenu + ed3dlib + planocim\n";
+
+    std::cout << "=== TODAS LAS PRUEBAS DE FASES 1 Y 2 SUPERADAS CON EXITO ===\n";
     return 0;
 }
-

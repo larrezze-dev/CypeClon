@@ -78,6 +78,32 @@ std::uint32_t Obra::add_barra(std::uint32_t nudo_ini, std::uint32_t nudo_fin, st
     return assigned_id;
 }
 
+std::uint32_t Obra::add_elemento_cimentacion(
+    TipoElementoCimentacion tipo,
+    std::uint32_t nudo_arranque_id,
+    double ancho_x,
+    double ancho_y,
+    double canto
+) {
+    const std::uint32_t assigned_id = cimentacion_.next_elemento_id++;
+    ElementoCimentacion elem{assigned_id, tipo, nudo_arranque_id, ancho_x, ancho_y, canto, 0.0};
+
+    undo_redo_.record_action(
+        "Nuevo elemento cimentacion Z" + std::to_string(assigned_id),
+        [this, elem]() {
+            cimentacion_.elementos.push_back(elem);
+        },
+        [this, assigned_id]() {
+            auto& vec = cimentacion_.elementos;
+            vec.erase(std::remove_if(vec.begin(), vec.end(),
+                                     [assigned_id](const ElementoCimentacion& e) { return e.id == assigned_id; }),
+                      vec.end());
+        },
+        true
+    );
+    return assigned_id;
+}
+
 const Nudo3d* Obra::find_nudo(std::uint32_t id) const noexcept {
     for (const auto& n : estructura_.nudos) {
         if (n.id == id) return &n;
@@ -103,16 +129,30 @@ core::BBox3d Obra::bounding_box() const noexcept {
 void Obra::write_binary(io::BinaryWriter& writer) const {
     writer.write_header();
 
-    const auto sec_dg = writer.begin_section("DATOS_GENERALES", 1);
+    const auto sec_dg = writer.begin_section("DATOS_GENERALES", 2);
+    writer.write_string_utf8(datos_generales_.ruta_directorio);
     writer.write_string_utf8(datos_generales_.clave);
     writer.write_string_utf8(datos_generales_.descripcion);
     writer.write_u8(static_cast<std::uint8_t>(datos_generales_.sistema_unidades));
     writer.write_string_utf8(datos_generales_.normas_resumen);
     writer.write_string_utf8(datos_generales_.acero_laminado);
     writer.write_string_utf8(datos_generales_.acero_conformado);
+    writer.write_string_utf8(datos_generales_.madera);
+    writer.write_string_utf8(datos_generales_.aluminio);
     writer.write_string_utf8(datos_generales_.hormigon_estructural);
+    writer.write_string_utf8(datos_generales_.hormigon_pilares);
+    writer.write_string_utf8(datos_generales_.hormigon_vigas);
+    writer.write_string_utf8(datos_generales_.hormigon_cimentacion);
+    writer.write_string_utf8(datos_generales_.acero_barras);
+    writer.write_string_utf8(datos_generales_.caracteristicas_arido);
+    writer.write_string_utf8(datos_generales_.ambiente_vigas);
+    writer.write_bool(datos_generales_.con_sismo_dinamico);
+    writer.write_bool(datos_generales_.verificar_deslizamiento_zapatas);
     writer.write_f64(datos_generales_.tension_terreno_persistente_mpa);
     writer.write_f64(datos_generales_.tension_terreno_accidental_mpa);
+    writer.write_f64(datos_generales_.pilotes_hormigon.excentricidad_momento_minimo_m);
+    writer.write_f64(datos_generales_.pilotes_hormigon.factor_pilotes_punta);
+    writer.write_f64(datos_generales_.pilotes_hormigon.coeficiente_pandeo);
     writer.end_section(sec_dg);
 
     const auto sec_ed3 = writer.begin_section("METAL3D_ESTRUCTURA", 1);
@@ -171,15 +211,37 @@ bool Obra::read_binary(io::BinaryReader& reader) {
     while (!reader.eof()) {
         const auto sec = reader.begin_section();
         if (sec.name == "DATOS_GENERALES") {
+            if (sec.version >= 2) {
+                datos_generales_.ruta_directorio = reader.read_string_utf8();
+            }
             datos_generales_.clave = reader.read_string_utf8();
             datos_generales_.descripcion = reader.read_string_utf8();
             datos_generales_.sistema_unidades = static_cast<units::UnitSystem>(reader.read_u8());
             datos_generales_.normas_resumen = reader.read_string_utf8();
             datos_generales_.acero_laminado = reader.read_string_utf8();
             datos_generales_.acero_conformado = reader.read_string_utf8();
+            if (sec.version >= 2) {
+                datos_generales_.madera = reader.read_string_utf8();
+                datos_generales_.aluminio = reader.read_string_utf8();
+            }
             datos_generales_.hormigon_estructural = reader.read_string_utf8();
+            if (sec.version >= 2) {
+                datos_generales_.hormigon_pilares = reader.read_string_utf8();
+                datos_generales_.hormigon_vigas = reader.read_string_utf8();
+                datos_generales_.hormigon_cimentacion = reader.read_string_utf8();
+                datos_generales_.acero_barras = reader.read_string_utf8();
+                datos_generales_.caracteristicas_arido = reader.read_string_utf8();
+                datos_generales_.ambiente_vigas = reader.read_string_utf8();
+                datos_generales_.con_sismo_dinamico = reader.read_bool();
+                datos_generales_.verificar_deslizamiento_zapatas = reader.read_bool();
+            }
             datos_generales_.tension_terreno_persistente_mpa = reader.read_f64();
             datos_generales_.tension_terreno_accidental_mpa = reader.read_f64();
+            if (sec.version >= 2) {
+                datos_generales_.pilotes_hormigon.excentricidad_momento_minimo_m = reader.read_f64();
+                datos_generales_.pilotes_hormigon.factor_pilotes_punta = reader.read_f64();
+                datos_generales_.pilotes_hormigon.coeficiente_pandeo = reader.read_f64();
+            }
             reader.end_section(sec);
         } else if (sec.name == "METAL3D_ESTRUCTURA") {
             estructura_.next_nudo_id = reader.read_u32();
@@ -236,6 +298,7 @@ bool Obra::read_binary(io::BinaryReader& reader) {
         }
     }
 
+    abierta_ = true;
     undo_redo_.clear();
     return true;
 }
@@ -337,9 +400,9 @@ bool Obra::from_json(const io::JsonValue& root) {
         estructura_.barras.push_back(std::move(b));
     }
     estructura_.next_barra_id = max_bid + 1;
+    abierta_ = true;
     undo_redo_.clear();
     return true;
 }
 
 } // namespace cypeclon::model
-

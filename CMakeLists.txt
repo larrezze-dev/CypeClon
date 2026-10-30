@@ -64,7 +64,7 @@ add_library(cypeclon_io STATIC
 target_link_libraries(cypeclon_io PUBLIC cypeclon_core cypeclon_units)
 
 # ==============================================================================
-# Modulos de Dominio, CAD y GUI (Esqueletos y Base para Fases 2-13)
+# Modulos de Dominio, CAD y GUI (Fases 2-13)
 # ==============================================================================
 
 add_library(cypeclon_model STATIC
@@ -98,6 +98,10 @@ add_library(cypeclon_foundation STATIC
 target_link_libraries(cypeclon_foundation PUBLIC cypeclon_core cypeclon_model cypeclon_codes)
 
 add_library(cypeclon_gui STATIC
+    src/gui/theme_palette.cpp
+    src/gui/docking_system.cpp
+    src/gui/welcome_and_dialogs.cpp
+    src/gui/ribbon_catalog.cpp
     src/gui/app_window.cpp
 )
 target_link_libraries(cypeclon_gui PUBLIC
@@ -135,14 +139,10 @@ add_executable(cypeclon_core_tests
     tests/test_math.cpp
     tests/test_units.cpp
     tests/test_io_undoredo.cpp
+    tests/test_gui_phase2.cpp
 )
 target_link_libraries(cypeclon_core_tests PRIVATE
-    cypeclon_core
-    cypeclon_units
-    cypeclon_io
-    cypeclon_model
-    cypeclon_cad
+    cypeclon_gui
 )
 
 add_test(NAME CoreUnitTests COMMAND cypeclon_core_tests)
-

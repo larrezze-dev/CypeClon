@@ -52,7 +52,31 @@ struct EtiquetaCapa {
     std::uint32_t color_rgb{0x0080FF};
 };
 
+struct ConfiguracionPilotesTerreno {
+    // Pestañas Pilotes (Hormigón armado) y Micropilotes en Datos Generales (04_dialog_step4.png)
+    double excentricidad_momento_minimo_m{0.10};
+    bool considerar_esfuerzos_axil_reducido{false};
+    double factor_pilotes_fuste{0.00};
+    double factor_pilotes_punta{0.80};
+    double coeficiente_pandeo{1.00};
+    bool analisis_estabilidad_lateral{false};
+};
+
+struct ConfiguracionEstadosLimite {
+    // Diálogo Estados límite (05_dialog_step5.png, 358x438)
+    std::string situacion_hormigon{"E.L.U. de rotura. Código Estructural"};
+    std::string situacion_cimentacion{"E.L.U. de rotura. CTE DB-SE-C"};
+    std::string situacion_acero_laminado{"E.L.U. de rotura. CTE DB SE-A"};
+    std::string situacion_acero_conformado{"E.L.U. de rotura. CTE DB SE-A"};
+    std::string situacion_madera{"E.L.U. de rotura. CTE DB SE-M"};
+    std::string situacion_aluminio{"E.L.U. de rotura. Eurocódigo 9"};
+    std::string categoria_uso_nieve{"Altitud <= 1000 m"};
+    bool comprobar_desplazamientos{true};
+    bool comprobar_tensiones_terreno{true};
+};
+
 struct DatosGeneralesObra {
+    std::string ruta_directorio{"D:\\CYPE Ingenieros\\Proyectos\\CYPE 3D\\"};
     std::string clave{"Obra1"};
     std::string descripcion{"Obra de CYPE 3D"};
     units::UnitSystem sistema_unidades{units::UnitSystem::SI};
@@ -61,18 +85,29 @@ struct DatosGeneralesObra {
     std::string normas_resumen{"Eurocódigo 2, CTE DB SE-A, Código Estructural, CTE DB SE-M y Eurocódigo 9"};
     std::string acero_laminado{"S275 (UNE-EN 10025-2)"};
     std::string acero_conformado{"S235"};
+    std::string madera{"Aserrada, procedente de coníferas o chopo (C24)"};
+    std::string aluminio{"EN AW-5083 - F"};
     std::string hormigon_estructural{"C25/30"};
+
+    // Bloque Hormigón armado (columna derecha)
     std::string hormigon_pilares{"C25/30"};
     std::string hormigon_vigas{"C25/30"};
     std::string hormigon_cimentacion{"C25/30"};
     std::string acero_barras{"S-400"};
-    std::string madera{"Aserrada C24"};
-    std::string aluminio{"EN AW-5083 - F"};
+    std::string caracteristicas_arido{"Cuarcita (15 mm), 30 mm"};
+    std::string ambiente_vigas{"X0"};
 
+    // Acciones y Terreno de cimentación
     bool con_sismo_dinamico{false};
+    bool resistencia_al_fuego_activa{false};
+    bool proceso_constructivo_activo{false};
     bool verificar_deslizamiento_zapatas{true};
     double tension_terreno_persistente_mpa{0.200};
     double tension_terreno_accidental_mpa{0.300};
+
+    ConfiguracionPilotesTerreno pilotes_hormigon{};
+    ConfiguracionPilotesTerreno micropilotes{};
+    ConfiguracionEstadosLimite estados_limite{};
 };
 
 struct EstructuraDatos {
@@ -88,8 +123,15 @@ enum class TipoElementoCimentacion : std::uint8_t {
     ZapataHormigonArmado = 0,
     ZapataHormigonMasa,
     Encepado,
+    ElementoLineal,
     VigaAtado,
     VigaCentradora
+};
+
+struct LimiteCimentacion {
+    std::uint32_t id{0};
+    std::vector<core::Vec2d> vertices;
+    bool cerrado{true};
 };
 
 struct ElementoCimentacion {
@@ -99,12 +141,15 @@ struct ElementoCimentacion {
     double ancho_x_m{1.20};
     double ancho_y_m{1.20};
     double canto_m{0.50};
+    double angulo_giro_deg{0.0};
 };
 
 struct CimentacionDatos {
     // Equivalente a plcdatos_t en planocim.dll
     std::vector<ElementoCimentacion> elementos;
+    std::vector<LimiteCimentacion> limites;
     std::uint32_t next_elemento_id{1};
+    std::uint32_t next_limite_id{1};
 };
 
 /**
@@ -114,6 +159,9 @@ struct CimentacionDatos {
 class Obra {
 public:
     Obra();
+
+    bool abierta() const noexcept { return abierta_; }
+    void set_abierta(bool estado) noexcept { abierta_ = estado; }
 
     const DatosGeneralesObra& datos_generales() const noexcept { return datos_generales_; }
     DatosGeneralesObra& datos_generales_mut() noexcept { return datos_generales_; }
@@ -134,6 +182,7 @@ public:
     std::uint32_t add_nudo(const core::Vec3d& pos, VinculacionExterior vinc = VinculacionExterior::Libre);
     bool move_nudo(std::uint32_t nudo_id, const core::Vec3d& new_pos);
     std::uint32_t add_barra(std::uint32_t nudo_ini, std::uint32_t nudo_fin, std::string_view perfil = "IPE 200", std::string_view material = "S275");
+    std::uint32_t add_elemento_cimentacion(TipoElementoCimentacion tipo, std::uint32_t nudo_arranque_id, double ancho_x = 1.20, double ancho_y = 1.20, double canto = 0.50);
 
     const Nudo3d* find_nudo(std::uint32_t id) const noexcept;
     const Barra3d* find_barra(std::uint32_t id) const noexcept;
@@ -150,6 +199,7 @@ public:
     bool from_json(const io::JsonValue& root);
 
 private:
+    bool abierta_{true};
     DatosGeneralesObra datos_generales_{};
     EstructuraDatos estructura_{};
     CimentacionDatos cimentacion_{};
