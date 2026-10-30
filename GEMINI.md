@@ -10,7 +10,7 @@
 
 ## Git y GitHub
 
-- De momento este proyecto no utiliza Git. No intentes crear commits ni ejecutar ninguna acción relacionada con Git o GitHub.
+- Gestionarás de forma autónoma Git y GitHub (push, merge, etc...).
 
 ## Ventana de contexto
 
