@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CypeClon — Dashboard de Avance de Desarrollo (CYPE 3D v2027 en C++20)</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --done: #22c55e;
+      --progress: #f59e0b;
+      --pending: #64748b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 28px;
+      line-height: 1.5;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 18px;
+      margin-bottom: 24px;
+    }
+    header h1 { font-size: 1.55rem; color: var(--accent); }
+    header p { color: var(--muted); font-size: 0.92rem; }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .kpi-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+    }
+    .kpi-title { font-size: 0.85rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .kpi-value { font-size: 2rem; font-weight: 700; margin: 6px 0; }
+    .kpi-sub { font-size: 0.82rem; color: var(--muted); }
+    .progress-bar {
+      width: 100%;
+      height: 10px;
+      background: #0b1120;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--done));
+    }
+    .section-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .card h2 {
+      font-size: 1.1rem;
+      margin-bottom: 14px;
+      color: var(--accent);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    .phase-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      font-size: 0.9rem;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .badge-done { background: rgba(34, 197, 94, 0.18); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); }
+    .badge-pending { background: rgba(100, 116, 139, 0.2); color: #cbd5e1; border: 1px solid rgba(100, 116, 139, 0.4); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    th { color: var(--muted); font-weight: 600; background: rgba(15, 23, 42, 0.5); }
+    tr:hover { background: rgba(56, 189, 248, 0.05); }
+    @media (max-width: 960px) { .section-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>CypeClon — Dashboard Ejecutivo y Técnico de Desarrollo</h1>
+      <p>Clon fiel en C++20 (MSVC 2026 x64 + OpenMP + OpenGL) de CYPE 3D Versión 2027</p>
+    </div>
+    <div style="text-align: right;">
+      <span class="badge badge-done">Fases 0 a 9 Completadas (100% Tests OK)</span>
+      <p style="margin-top: 4px;">Última actualización: Fase 9 (P-10.1 &amp; P-10.2 / T-015)</p>
+    </div>
+  </header>
+
+  <section class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-title">Avance Global de Tareas Atómicas</div>
+      <div class="kpi-value">82.4%</div>
+      <div class="kpi-sub">28 de 34 tareas atómicas completadas (A-001 a A-028)</div>
+      <div class="progress-bar"><div class="progress-fill" style="width: 82.4%;"></div></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">Avance por Fases del Plan (.PLANNING.md)</div>
+      <div class="kpi-value">10 / 14</div>
+      <div class="kpi-sub">Fases 0 a 9 finalizadas | Fases 10 a 13 pendientes</div>
+      <div class="progress-bar"><div class="progress-fill" style="width: 71.4%;"></div></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">DLLs Nativas Inspeccionadas (REA)</div>
+      <div class="kpi-value">83 DLLs</div>
+      <div class="kpi-sub">678 binarios inventariados + 83 DLLs decompiladas/inspeccionadas</div>
+      <div class="progress-bar"><div class="progress-fill" style="width: 100%;"></div></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-title">Suites de Pruebas Unitarias (CTest)</div>
+      <div class="kpi-value">10 / 10</div>
+      <div class="kpi-sub">100% PASS en cypeclon_core_tests (Fases 1 a 9)</div>
+      <div class="progress-bar"><div class="progress-fill" style="width: 100%;"></div></div>
+    </div>
+  </section>
+
+  <section class="section-grid">
+    <div class="card">
+      <h2>Estado por Fases de Ingeniería (.TAREAS.md)</h2>
+      <div class="phase-row"><span>Fase 0: Ingeniería Inversa (REA) (T-001 a T-006)</span><span class="badge badge-done">100% Completada</span></div>
+      <div class="phase-row"><span>Fase 1: Núcleo C++20, Unidades, I/O y Undo/Redo (T-007)</span><span class="badge badge-done">100% Completada</span></div>
+      <div class="phase-row"><span>Fase 2: Toolkit GUI, Temas, Docking y Ribbon (T-008)</span><span class="badge badge-done">100% Completada</span></div>
+      <div class="phase-row"><span>Fase 3: Motor CAD 2D/3D, Vistas MDI y Snaps (T-009)</span><span class="badge badge-done">100% Completada</span></div>
+      <div class="phase-row"><span>Fase 4: Normativas, Materiales, Acciones y Pórticos (T-010)</span><span class="badge badge-done">100% Completada</span></div>
+      <div class="phase-row"><span>Fase 5: Nudos, Barras, Perfiles, Pandeo y H.A. (T-011)</span><span class="badge badge-done">100% Completada</span></div>
+      <div class="phase-row"><span>Fase 6: Láminas MEF Shell y Paños de Carga (T-012)</span><span class="badge badge-done">100% Completada</span></div>
+      <div class="phase-row"><span>Fase 7: Subsistema Integral de Cargas 3D (T-013)</span><span class="badge badge-done">100% Completada</span></div>
+      <div class="phase-row"><span>Fase 8: Solver Matricial 3D, Modal, P-Delta y Pushover (T-014)</span><span class="badge badge-done">100% Completada</span></div>
+      <div class="phase-row"><span>Fase 9: Comprobación ELU/ELS/Fuego y Editores H.A. (T-015)</span><span class="badge badge-done">100% Completada</span></div>
+      <div class="phase-row"><span>Fase 10: Consulta Gráfica de Resultados 3D (T-016)</span><span class="badge badge-pending">Pendiente</span></div>
+      <div class="phase-row"><span>Fase 11: Uniones Soldadas/Atornilladas y Placas (T-017)</span><span class="badge badge-pending">Pendiente</span></div>
+      <div class="phase-row"><span>Fase 12: Solapa Cimentación Completa (T-018)</span><span class="badge badge-pending">Pendiente</span></div>
+      <div class="phase-row"><span>Fase 13: Listados, Planos y Exportación BIM/IFC (T-019)</span><span class="badge badge-pending">Pendiente</span></div>
+    </div>
+
+    <div class="card">
+      <h2>Arquitectura de Módulos C++20 Compilados</h2>
+      <table>
+        <thead>
+          <tr><th>Biblioteca CMake</th><th>Archivos Fuente</th><th>DLLs Equivalentes CYPE 3D</th><th>Estado</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>cypeclon_core</code></td><td><code>memory.cpp</code>, <code>string_utils.cpp</code>, <code>math.cpp</code></td><td><code>cypemem</code>, <code>basicos</code>, <code>cypestr</code>, <code>cypemath</code></td><td><span class="badge badge-done">Activo</span></td></tr>
+          <tr><td><code>cypeclon_units</code></td><td><code>units.cpp</code></td><td><code>unidades</code>, <code>cypeud</code>, <code>cyudconf</code></td><td><span class="badge badge-done">Activo</span></td></tr>
+          <tr><td><code>cypeclon_io</code></td><td><code>cypesave.cpp</code>, <code>undoredo.cpp</code></td><td><code>cypesave</code>, <code>undoredo</code></td><td><span class="badge badge-done">Activo</span></td></tr>
+          <tr><td><code>cypeclon_model</code></td><td><code>obra.cpp</code>, <code>structure_elements.cpp</code>, <code>shells_panels_loads.cpp</code></td><td><code>barra3d</code>, <code>bibperf3</code>, <code>seccion</code>, <code>calcmef</code>, <code>panyos3d</code></td><td><span class="badge badge-done">Activo</span></td></tr>
+          <tr><td><code>cypeclon_cad</code></td><td><code>cad_engine.cpp</code></td><td><code>entornop</code>, <code>paneldib</code>, <code>cyhlr</code>, <code>vistas3d</code>, <code>dxflib</code></td><td><span class="badge badge-done">Activo</span></td></tr>
+          <tr><td><code>cypeclon_codes</code></td><td><code>normativa_engine.cpp</code></td><td><code>cypenorma</code>, <code>datmater</code>, <code>sestlim</code>, <code>sismo</code>, <code>veviento</code></td><td><span class="badge badge-done">Activo</span></td></tr>
+          <tr><td><code>cypeclon_solver</code></td><td><code>solver_engine.cpp</code>, <code>design_check_engine.cpp</code></td><td><code>frontlib</code>, <code>cyopensees</code>, <code>compsec</code>, <code>normamet</code>, <code>comphorm</code></td><td><span class="badge badge-done">Activo</span></td></tr>
+          <tr><td><code>cypeclon_gui</code></td><td><code>theme_palette.cpp</code>, <code>docking_system.cpp</code>, <code>ribbon_catalog.cpp</code>, <code>app_window.cpp</code></td><td><code>entograf</code>, <code>componen</code>, <code>ribbon</code>, <code>entomenu</code>, <code>ed3dlib</code></td><td><span class="badge badge-done">Activo</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Desglose de Tareas Atómicas Recientes (Fase 8 y Fase 9)</h2>
+    <table>
+      <thead>
+        <tr><th>ID</th><th>Fase</th><th>Descripción Técnica</th><th>Evidencia REA / Tests</th><th>Estado</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>A-025</strong></td>
+          <td>Fase 8 (P-09.1)</td>
+          <td>Solver Matricial 3D y MEF (<code>LinearAlgebraEngine</code>, <code>TimoshenkoBarElement3d</code> 12 GDL, <code>ShellTriangleElement3d</code> 18 GDL CST+DKT)</td>
+          <td><code>frontlib.dll</code>, <code>cypematr.dll</code> / <code>test_solver_phase8.cpp</code></td>
+          <td><span class="badge badge-done">[x] Completada</span></td>
+        </tr>
+        <tr>
+          <td><strong>A-026</strong></td>
+          <td>Fase 8 (P-09.2)</td>
+          <td>Análisis Modal Espectral CQC/SRSS, 2.º orden P-Delta, No Lineal de Tirantes/Apoyos, Pandeo Global y Pushover N2</td>
+          <td><code>cyopensees.dll</code>, <code>pushover.dll</code> / <code>test_solver_phase8.cpp</code></td>
+          <td><span class="badge badge-done">[x] Completada</span></td>
+        </tr>
+        <tr>
+          <td><strong>A-027</strong></td>
+          <td>Fase 9 (P-10.1)</td>
+          <td>Motor de Comprobación ELU/ELS/Fuego artículo por artículo y Dimensionamiento Óptimo en Serie (<code>MemberDesignEngine</code>)</td>
+          <td><code>compsec.dll</code>, <code>normamet.dll</code>, <code>perfil2.dll</code>, <code>gestcomp.dll</code> / <code>test_design_phase9.cpp</code></td>
+          <td><span class="badge badge-done">[x] Completada</span></td>
+        </tr>
+        <tr>
+          <td><strong>A-028</strong></td>
+          <td>Fase 9 (P-10.2)</td>
+          <td>Editores Avanzados de Pilares y Vigas H.A. (<code>ReinforcedConcreteEditorEngine</code>: diagramas N-My-Mz, Bresler, gráficas As,nec vs As,disp, fisuración y despiece)</td>
+          <td><code>visesfpil.dll</code>, <code>comphorm.dll</code>, <code>pilares.dll</code>, <code>porvigas.dll</code> / <code>test_design_phase9.cpp</code></td>
+          <td><span class="badge badge-done">[x] Completada</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</body>
+</html>

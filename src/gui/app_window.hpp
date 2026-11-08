@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cad/cad_engine.hpp"
+#include "codes/design_check_engine.hpp"
 #include "gui/docking_system.hpp"
 #include "gui/ribbon_catalog.hpp"
 #include "gui/theme_palette.hpp"
@@ -111,6 +112,7 @@ public:
     const std::string& active_receptor_id() const noexcept { return active_receptor_id_; }
     const std::string& status_bar_text() const noexcept { return status_bar_text_; }
     const solver::SolverSummary& last_solver_summary() const noexcept { return last_solver_summary_; }
+    const codes::ResumenComprobacionObra& last_design_summary() const noexcept { return last_design_summary_; }
 
     std::string window_title() const;
     int run_headless_self_check() const;
@@ -121,6 +123,7 @@ private:
 
     model::Obra obra_{};
     solver::SolverSummary last_solver_summary_{};
+    codes::ResumenComprobacionObra last_design_summary_{};
     ThemePalette palette_{};
     DockingSystem docking_{};
     RibbonCatalog ribbon_{true};

@@ -86,6 +86,7 @@ target_link_libraries(cypeclon_codes PUBLIC cypeclon_core cypeclon_units cypeclo
 
 add_library(cypeclon_solver STATIC
     src/solver/solver_engine.cpp
+    src/codes/design_check_engine.cpp
 )
 target_link_libraries(cypeclon_solver PUBLIC cypeclon_core cypeclon_units cypeclon_model cypeclon_codes)
 
@@ -147,6 +148,7 @@ add_executable(cypeclon_core_tests
     tests/test_structure_phase5.cpp
     tests/test_shells_loads_phase6_7.cpp
     tests/test_solver_phase8.cpp
+    tests/test_design_phase9.cpp
 )
 target_link_libraries(cypeclon_core_tests PRIVATE
     cypeclon_gui

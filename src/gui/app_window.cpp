@@ -205,8 +205,6 @@ bool AppWindow::execute_command(std::string_view command_id) {
 
     if (item->kind == RibbonButtonKind::ReceptorOpcion) {
         active_receptor_id_ = item->id;
-        status_bar_text_ = "Herramienta activa: " + item->label + " [" + item->id + "]";
-        return true;
     }
 
     if (command_id == "generar_zapatas_y_vigas") {
@@ -377,7 +375,97 @@ bool AppWindow::execute_command(std::string_view command_id) {
         return true;
     }
 
-    status_bar_text_ = "Ejecutado comando: " + item->label + " (" + item->id + ")";
+    // Comandos de Fase 9 (Comprobación ELU/ELS/Fuego, Dimensionamiento Óptimo y Editores H.A. — P-10.1 / P-10.2)
+    if (command_id == "Calculo_comprueba_elementos" || command_id == "Calculo_comprobaciones_ELU") {
+        if (last_solver_summary_.envolventes_barras.empty() && !obra_.estructura().barras.empty()) {
+            last_solver_summary_ = solver::SolverEngine::analyze_linear_static(obra_);
+        }
+        last_design_summary_ = codes::MemberDesignEngine::comprobar_todas_las_barras(obra_, last_solver_summary_);
+        status_bar_text_ = "Comprobación de barras completada: " +
+                           std::to_string(last_design_summary_.barras_que_cumplen) + "/" +
+                           std::to_string(last_design_summary_.comprobaciones_barras.size()) +
+                           " cumplen (aprov. máx = " +
+                           std::to_string(last_design_summary_.aprovechamiento_maximo_obra_pct) + "%).";
+        return true;
+    }
+    if (command_id == "dimensionamiento_desde_primer_perfil" || command_id == "dimensionamiento_desde_perfil_actual") {
+        const auto modo = (command_id == "dimensionamiento_desde_primer_perfil")
+                              ? codes::ModoDimensionamientoSerie::DesdePrimerPerfilSerie
+                              : codes::ModoDimensionamientoSerie::DesdePerfilActual;
+        last_design_summary_ = codes::MemberDesignEngine::dimensionar_estructura_completa(
+            obra_, last_solver_summary_, modo, true);
+        std::size_t modificados = 0;
+        for (const auto& dim : last_design_summary_.dimensionamientos_barras) {
+            if (dim.perfil_modificado) {
+                ++modificados;
+            }
+        }
+        status_bar_text_ = "Dimensionamiento óptimo completado: " +
+                           std::to_string(modificados) +
+                           " perfiles actualizados.";
+        return true;
+    }
+    if (command_id == "Calculo_Dimensionar_revestimiento_incendio") {
+        if (last_solver_summary_.envolventes_barras.empty() && !obra_.estructura().barras.empty()) {
+            last_solver_summary_ = solver::SolverEngine::analyze_linear_static(obra_);
+        }
+        last_design_summary_ = codes::MemberDesignEngine::comprobar_todas_las_barras(obra_, last_solver_summary_);
+        status_bar_text_ = "Dimensionamiento de revestimiento de protección al fuego completado.";
+        return true;
+    }
+    if (command_id == "pilares_armaduras") {
+        if (last_solver_summary_.envolventes_barras.empty() && !obra_.estructura().barras.empty()) {
+            last_solver_summary_ = solver::SolverEngine::analyze_linear_static(obra_);
+        }
+        std::size_t redim = 0;
+        for (auto& p : obra_.estructura_mut().pilares) {
+            if (!p.bloqueado_armado) {
+                const auto tramos_res = codes::ReinforcedConcreteEditorEngine::dimensionar_pilar_completo(
+                    obra_, p, last_solver_summary_);
+                redim += tramos_res.size();
+            }
+        }
+        status_bar_text_ = "Editor de armaduras de pilares H.A.: " + std::to_string(redim) + " tramos dimensionados.";
+        return true;
+    }
+    if (command_id == "pilares_bloquear" || command_id == "pilares_desbloquear") {
+        const bool bloq = (command_id == "pilares_bloquear");
+        for (auto& p : obra_.estructura_mut().pilares) {
+            p.bloqueado_armado = bloq;
+        }
+        status_bar_text_ = bloq ? "Armaduras de pilares bloqueadas." : "Armaduras de pilares desbloqueadas.";
+        return true;
+    }
+    if (command_id == "pv_ed_editar_todos_portico") {
+        if (last_solver_summary_.envolventes_barras.empty() && !obra_.estructura().barras.empty()) {
+            last_solver_summary_ = solver::SolverEngine::analyze_linear_static(obra_);
+        }
+        std::size_t redim = 0;
+        for (auto& port : obra_.estructura_mut().porticos_vigas) {
+            if (!port.bloqueado_armado) {
+                const auto vanos_res = codes::ReinforcedConcreteEditorEngine::dimensionar_portico_vigas(
+                    obra_, port, last_solver_summary_);
+                redim += vanos_res.size();
+            }
+        }
+        status_bar_text_ = "Editor de pórticos de vigas H.A.: " + std::to_string(redim) + " vanos dimensionados.";
+        return true;
+    }
+    if (command_id == "pv_ed_bloquear" || command_id == "pv_ed_desbloquear") {
+        const bool bloq = (command_id == "pv_ed_bloquear");
+        for (auto& port : obra_.estructura_mut().porticos_vigas) {
+            port.bloqueado_armado = bloq;
+        }
+        status_bar_text_ = bloq ? "Armaduras de pórticos de vigas bloqueadas."
+                                : "Armaduras de pórticos de vigas desbloqueadas.";
+        return true;
+    }
+
+    if (item->kind == RibbonButtonKind::ReceptorOpcion) {
+        status_bar_text_ = "Herramienta activa: " + item->label + " [" + item->id + "]";
+    } else {
+        status_bar_text_ = "Ejecutado comando: " + item->label + " (" + item->id + ")";
+    }
     return true;
 }
 
