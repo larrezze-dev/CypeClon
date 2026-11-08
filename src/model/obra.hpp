@@ -3,6 +3,7 @@
 #include "core/math.hpp"
 #include "io/cypesave.hpp"
 #include "io/undoredo.hpp"
+#include "model/shells_panels_loads.hpp"
 #include "model/structure_elements.hpp"
 #include "units/units.hpp"
 
@@ -65,6 +66,7 @@ struct Barra3d {
     AsignacionRotulaPlasticaBarra rotulas_plasticas{};
     std::uint32_t pieza_id{0};
     std::uint32_t agrupacion_id{0};
+    bool incluir_peso_propio{true}; ///< `Carga_barra_activar_desactiva_pp`
 };
 
 struct Lamina3d {
@@ -73,6 +75,24 @@ struct Lamina3d {
     double espesor_m{0.20};
     std::string material{"C25/30"};
     std::uint32_t capa_id{1};
+
+    // Fase 6 (P-07.1): Propiedades completas de Lámina MEF Shell (`calcmef`, `calcmallad3d`, `visesf3d`)
+    FamiliaMaterialLamina familia_material{FamiliaMaterialLamina::Hormigon};
+    double modulo_elasticidad_mpa{31000.0};
+    double coef_poisson{0.20};
+    double peso_especifico_kn_m3{25.0};
+    bool incluir_peso_propio{true};
+    EnraseLamina enrase{EnraseLamina::PlanoMedio};
+    double desfase_z_m{0.0};
+    std::uint32_t arista_eje_x_index{0};
+    double angulo_giro_ejes_rad{0.0};
+    bool invertir_eje_z{false};
+    double tamano_discretizacion_m{1.00};
+    FactoresRigidezLamina factores_rigidez{};
+    std::vector<HuecoLamina3d> huecos;
+    std::vector<VinculacionAristaLamina> vinculaciones_aristas;
+    std::vector<BandaIntegracionLamina> bandas_integracion;
+    MallaLamina3d malla{};
 };
 
 struct Panyo3d {
@@ -80,6 +100,10 @@ struct Panyo3d {
     std::vector<core::Vec3d> vertices;
     core::Vec3d direccion_reparto{1.0, 0.0, 0.0};
     std::uint32_t capa_id{1};
+
+    // Fase 6 (P-07.2): Referencia y lista opcional de barras portantes asociadas al paño (`panyos3d.dll`)
+    std::string referencia{"Paño 1"};
+    std::vector<std::uint32_t> barras_activas_reparto;
 };
 
 /**
@@ -108,25 +132,42 @@ struct CargaSuperficialPanyo {
     core::Vec3d direccion{0.0, 0.0, -1.0}; ///< Vector director (p.ej. {0,0,-1} gravitatoria o normal al paño para viento)
     bool en_ejes_locales_panyo{false};
     std::string descripcion_zona;      ///< p.ej. "Cubierta Zona F", "Fachada Barlovento D"
+
+    // Fase 6 / Fase 7 (P-07.2 / P-08.1): Ámbitos parciales y distribución variable (`p3dcarsup_*`)
+    AmbitoCargaSuperficial ambito{AmbitoCargaSuperficial::TodoElPanyo};
+    bool es_variable{false};
+    double valor_q2_kn_m2{0.0};
+    double valor_q3_kn_m2{0.0};
+    std::vector<core::Vec3d> poligono_zona;
 };
 
 /**
- * @brief Carga lineal uniforme/trapezoidal sobre una Barra 3D (`ed3genport_append_carga_a_ultima_barra`).
+ * @brief Carga sobre una Barra 3D (`ed3genport_append_carga_a_ultima_barra` / `ed3mnucar.c`).
  */
 struct CargaLinealBarra {
     std::uint32_t id{0};
     std::uint32_t barra_id{0};
     std::uint32_t hipotesis_id{1};
-    double q_ini_kn_m{0.0};            ///< Valor inicial de carga lineal (kN/m)
+    double q_ini_kn_m{0.0};            ///< Valor inicial de carga lineal (kN/m) o fuerza puntual P (kN) o momento M (kN·m)
     double q_fin_kn_m{0.0};            ///< Valor final de carga lineal (kN/m)
     double x_ini_rel{0.0};             ///< Posición relativa inicial [0..1]
     double x_fin_rel{1.0};             ///< Posición relativa final [0..1]
     core::Vec3d direccion{0.0, 0.0, -1.0};
     bool en_ejes_locales{false};
+
+    // Fase 7 (P-08.1): Tipología completa de carga en barra (puntual, momento, térmica, pretensado y reparto de paños)
+    TipoCargaBarra tipo{TipoCargaBarra::Uniforme};
+    SistemaEjesCarga sistema_ejes{SistemaEjesCarga::Generales};
+    double delta_temp_uniforme_c{0.0};
+    double delta_temp_gradiente_c{0.0};
+    double axil_pretensado_kn{0.0};
+    double excentricidad_pretensado_m{0.0};
+    bool generada_por_panyo{false};
+    std::uint32_t panyo_origen_id{0};
 };
 
 /**
- * @brief Carga puntual en Nudo 3D (`ed3obra_append_listado_cargas_nudos_a_documento`).
+ * @brief Carga puntual y/o desplazamiento prescrito en Nudo 3D (`ed3obra_append_listado_cargas_nudos_a_documento`).
  */
 struct CargaPuntualNudo {
     std::uint32_t id{0};
@@ -134,6 +175,11 @@ struct CargaPuntualNudo {
     std::uint32_t hipotesis_id{1};
     core::Vec3d fuerzas_kn{0.0, 0.0, 0.0};    ///< Fx, Fy, Fz (kN)
     core::Vec3d momentos_knm{0.0, 0.0, 0.0};  ///< Mx, My, Mz (kN·m)
+
+    // Fase 7 (P-08.1): Desplazamientos (m) y giros (rad) prescritos por hipótesis (`Carga_nudo_desp_y_giros_prescritos`)
+    bool tiene_desplazamiento_prescrito{false};
+    core::Vec3d desp_prescrito_m{0.0, 0.0, 0.0};
+    core::Vec3d giro_prescrito_rad{0.0, 0.0, 0.0};
 };
 
 /**
@@ -270,6 +316,10 @@ struct EstructuraDatos {
     std::vector<PorticoVigasEstructural> porticos_vigas;
     ProfileLibraryManager biblioteca_perfiles{};
 
+    // Fase 6 y Fase 7 (P-07.1, P-07.2, P-08.1): Cargas en láminas y configuración de visualización de cargas
+    std::vector<CargaLamina3d> cargas_laminas;
+    ConfiguracionVisualizacionCargas config_vis_cargas{};
+
     std::uint32_t next_nudo_id{1};
     std::uint32_t next_barra_id{1};
     std::uint32_t next_lamina_id{1};
@@ -289,6 +339,7 @@ struct EstructuraDatos {
     std::uint32_t next_rotula_id{1};
     std::uint32_t next_pilar_id{1};
     std::uint32_t next_portico_id{1};
+    std::uint32_t next_carga_lamina_id{1};
 };
 
 enum class TipoElementoCimentacion : std::uint8_t {
@@ -443,6 +494,49 @@ public:
     // Fase 5 (P-06.4): Pilares y Vigas de Hormigón Armado / Mixtos
     std::uint32_t add_pilar_estructural(const PilarEstructural& pilar, bool generar_barras_3d = true);
     std::uint32_t add_portico_vigas(const PorticoVigasEstructural& portico);
+
+    // Fase 6 (P-07.1): Operaciones sobre Láminas (Elementos Finitos Shell)
+    const Lamina3d* find_lamina(std::uint32_t id) const noexcept;
+    Lamina3d* find_lamina_mut(std::uint32_t id) noexcept;
+    bool delete_lamina(std::uint32_t lamina_id);
+    bool move_lamina(std::uint32_t lamina_id, const core::Vec3d& delta);
+    std::uint32_t add_hueco_lamina(std::uint32_t lamina_id, const std::vector<core::Vec3d>& vertices_hueco);
+    std::uint32_t add_banda_integracion_lamina(std::uint32_t lamina_id, const BandaIntegracionLamina& banda);
+    bool set_vinculacion_arista_lamina(std::uint32_t lamina_id, const VinculacionAristaLamina& vinc);
+    std::uint32_t unir_laminas(std::uint32_t lamina_a_id, std::uint32_t lamina_b_id);
+    std::pair<std::uint32_t, std::uint32_t> dividir_lamina(
+        std::uint32_t lamina_id,
+        std::size_t idx_vertice_a,
+        std::size_t idx_vertice_b);
+    std::size_t discretizar_todas_las_laminas(double tamano_defecto_m = 1.00);
+
+    // Fase 6 (P-07.2): Operaciones sobre Paños / Superficies de Carga y Reparto a Barras
+    const Panyo3d* find_panyo(std::uint32_t id) const noexcept;
+    Panyo3d* find_panyo_mut(std::uint32_t id) noexcept;
+    bool delete_panyo(std::uint32_t panyo_id);
+    bool move_panyo(std::uint32_t panyo_id, const core::Vec3d& delta);
+    bool set_direccion_reparto_panyo(std::uint32_t panyo_id, const core::Vec3d& direccion);
+    std::pair<std::uint32_t, std::uint32_t> dividir_panyo(
+        std::uint32_t panyo_id,
+        std::size_t idx_vertice_a,
+        std::size_t idx_vertice_b);
+    std::size_t actualizar_reparto_cargas_panyos_a_barras();
+
+    // Fase 7 (P-08.1): Gestión completa de Cargas en Nudos, Barras, Láminas y Paños
+    bool editar_carga_nudo(std::uint32_t carga_id, const core::Vec3d& fuerzas_kn, const core::Vec3d& momentos_knm);
+    bool delete_carga_nudo(std::uint32_t carga_id);
+    bool cambiar_hipotesis_carga_nudo(std::uint32_t carga_id, std::uint32_t nueva_hipotesis_id);
+
+    std::uint32_t add_carga_especial_barra(const CargaLinealBarra& carga);
+    bool delete_carga_barra(std::uint32_t carga_id);
+    bool cambiar_hipotesis_carga_barra(std::uint32_t carga_id, std::uint32_t nueva_hipotesis_id);
+
+    std::uint32_t add_carga_lamina(const CargaLamina3d& carga);
+    bool delete_carga_lamina(std::uint32_t carga_id);
+    bool cambiar_hipotesis_carga_lamina(std::uint32_t carga_id, std::uint32_t nueva_hipotesis_id);
+
+    bool delete_carga_superficial_panyo(std::uint32_t carga_id);
+    bool cambiar_hipotesis_carga_superficial_panyo(std::uint32_t carga_id, std::uint32_t nueva_hipotesis_id);
 
     // Serialización binaria (.ed3 via cypesave) y JSON
     void write_binary(io::BinaryWriter& writer) const;

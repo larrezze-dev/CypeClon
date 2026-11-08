@@ -963,6 +963,389 @@ std::uint32_t Obra::add_portico_vigas(const PorticoVigasEstructural& portico) {
     return estructura_.porticos_vigas.back().id;
 }
 
+// ============================================================================
+// Fase 6 (P-07.1): Subsistema de Láminas MEF Shell (`calcmef`, `calcmallad3d`, `visesf3d`)
+// ============================================================================
+
+const Lamina3d* Obra::find_lamina(std::uint32_t id) const noexcept {
+    for (const auto& lam : estructura_.laminas) {
+        if (lam.id == id) return &lam;
+    }
+    return nullptr;
+}
+
+Lamina3d* Obra::find_lamina_mut(std::uint32_t id) noexcept {
+    for (auto& lam : estructura_.laminas) {
+        if (lam.id == id) return &lam;
+    }
+    return nullptr;
+}
+
+bool Obra::delete_lamina(std::uint32_t lamina_id) {
+    auto it = std::find_if(estructura_.laminas.begin(), estructura_.laminas.end(),
+                           [lamina_id](const Lamina3d& l) { return l.id == lamina_id; });
+    if (it == estructura_.laminas.end()) return false;
+
+    const Lamina3d saved = *it;
+    undo_redo_.record_action(
+        "Borrar lámina L" + std::to_string(lamina_id),
+        [this, lamina_id]() {
+            estructura_.laminas.erase(
+                std::remove_if(estructura_.laminas.begin(), estructura_.laminas.end(),
+                               [lamina_id](const Lamina3d& l) { return l.id == lamina_id; }),
+                estructura_.laminas.end());
+            estructura_.cargas_laminas.erase(
+                std::remove_if(estructura_.cargas_laminas.begin(), estructura_.cargas_laminas.end(),
+                               [lamina_id](const CargaLamina3d& cl) { return cl.lamina_id == lamina_id; }),
+                estructura_.cargas_laminas.end());
+        },
+        [this, saved]() {
+            estructura_.laminas.push_back(saved);
+        },
+        true
+    );
+    return true;
+}
+
+bool Obra::move_lamina(std::uint32_t lamina_id, const core::Vec3d& delta) {
+    Lamina3d* lam = find_lamina_mut(lamina_id);
+    if (!lam) return false;
+    for (auto& v : lam->vertices) {
+        v = v + delta;
+    }
+    for (auto& h : lam->huecos) {
+        for (auto& hv : h.vertices) {
+            hv = hv + delta;
+        }
+    }
+    return true;
+}
+
+std::uint32_t Obra::add_hueco_lamina(std::uint32_t lamina_id, const std::vector<core::Vec3d>& vertices_hueco) {
+    Lamina3d* lam = find_lamina_mut(lamina_id);
+    if (!lam || vertices_hueco.size() < 3) return 0;
+    const std::uint32_t hid = static_cast<std::uint32_t>(lam->huecos.size() + 1);
+    lam->huecos.push_back(HuecoLamina3d{hid, vertices_hueco});
+    return hid;
+}
+
+std::uint32_t Obra::add_banda_integracion_lamina(std::uint32_t lamina_id, const BandaIntegracionLamina& banda) {
+    Lamina3d* lam = find_lamina_mut(lamina_id);
+    if (!lam) return 0;
+    BandaIntegracionLamina copy = banda;
+    copy.id = static_cast<std::uint32_t>(lam->bandas_integracion.size() + 1);
+    if (copy.nombre.empty()) {
+        copy.nombre = "Banda " + std::to_string(copy.id);
+    }
+    lam->bandas_integracion.push_back(std::move(copy));
+    return lam->bandas_integracion.back().id;
+}
+
+bool Obra::set_vinculacion_arista_lamina(std::uint32_t lamina_id, const VinculacionAristaLamina& vinc) {
+    Lamina3d* lam = find_lamina_mut(lamina_id);
+    if (!lam) return false;
+    for (auto& existing : lam->vinculaciones_aristas) {
+        if (existing.arista_index == vinc.arista_index) {
+            existing = vinc;
+            return true;
+        }
+    }
+    lam->vinculaciones_aristas.push_back(vinc);
+    return true;
+}
+
+std::uint32_t Obra::unir_laminas(std::uint32_t lamina_a_id, std::uint32_t lamina_b_id) {
+    if (lamina_a_id == lamina_b_id) return 0;
+    const Lamina3d* la = find_lamina(lamina_a_id);
+    const Lamina3d* lb = find_lamina(lamina_b_id);
+    if (!la || !lb || la->vertices.size() < 3 || lb->vertices.size() < 3) return 0;
+
+    // Construir envolvente convexa 2D proyectada sobre el plano de la lámina A
+    const auto axes = ShellElementEngine::calcular_ejes_locales_lamina(la->vertices);
+    const core::Vec3d origin = la->vertices.front();
+
+    std::vector<core::Vec3d> all_pts = la->vertices;
+    for (const auto& v : lb->vertices) {
+        bool dup = false;
+        for (const auto& existing : all_pts) {
+            if (existing.distance_to(v) < 1e-3) {
+                dup = true;
+                break;
+            }
+        }
+        if (!dup) all_pts.push_back(v);
+    }
+
+    // Ordenar vértices angularmente alrededor del centroide proyectado
+    core::Vec3d centroid{0.0, 0.0, 0.0};
+    for (const auto& p : all_pts) centroid = centroid + p;
+    centroid = centroid * (1.0 / static_cast<double>(all_pts.size()));
+
+    std::sort(all_pts.begin(), all_pts.end(), [&](const core::Vec3d& p1, const core::Vec3d& p2) {
+        const core::Vec3d d1 = p1 - centroid;
+        const core::Vec3d d2 = p2 - centroid;
+        const double a1 = std::atan2(d1.dot(axes.v), d1.dot(axes.u));
+        const double a2 = std::atan2(d2.dot(axes.v), d2.dot(axes.u));
+        return a1 < a2;
+    });
+    (void)origin;
+
+    const double espesor = la->espesor_m;
+    const std::string mat = la->material;
+    const std::uint32_t capa = la->capa_id;
+    delete_lamina(lamina_a_id);
+    delete_lamina(lamina_b_id);
+    return add_lamina(all_pts, espesor, mat, capa);
+}
+
+std::pair<std::uint32_t, std::uint32_t> Obra::dividir_lamina(
+    std::uint32_t lamina_id,
+    std::size_t idx_vertice_a,
+    std::size_t idx_vertice_b
+) {
+    const Lamina3d* lam = find_lamina(lamina_id);
+    if (!lam || lam->vertices.size() < 4) return {0, 0};
+    if (idx_vertice_a >= lam->vertices.size() || idx_vertice_b >= lam->vertices.size()) return {0, 0};
+    if (idx_vertice_a > idx_vertice_b) std::swap(idx_vertice_a, idx_vertice_b);
+    if (idx_vertice_b - idx_vertice_a < 2) return {0, 0};
+
+    std::vector<core::Vec3d> poly1;
+    for (std::size_t i = idx_vertice_a; i <= idx_vertice_b; ++i) {
+        poly1.push_back(lam->vertices[i]);
+    }
+
+    std::vector<core::Vec3d> poly2;
+    for (std::size_t i = idx_vertice_b; i < lam->vertices.size(); ++i) {
+        poly2.push_back(lam->vertices[i]);
+    }
+    for (std::size_t i = 0; i <= idx_vertice_a; ++i) {
+        poly2.push_back(lam->vertices[i]);
+    }
+
+    const double esp = lam->espesor_m;
+    const std::string mat = lam->material;
+    const std::uint32_t capa = lam->capa_id;
+    delete_lamina(lamina_id);
+    const auto id1 = add_lamina(poly1, esp, mat, capa);
+    const auto id2 = add_lamina(poly2, esp, mat, capa);
+    return {id1, id2};
+}
+
+std::size_t Obra::discretizar_todas_las_laminas(double tamano_defecto_m) {
+    std::size_t total_triangulos = 0;
+    for (auto& lam : estructura_.laminas) {
+        const double h_elem = (lam.tamano_discretizacion_m > 0.05) ? lam.tamano_discretizacion_m : tamano_defecto_m;
+        lam.malla = ShellElementEngine::generar_mallado_lamina(lam, h_elem);
+        total_triangulos += lam.malla.triangulos.size();
+    }
+    return total_triangulos;
+}
+
+// ============================================================================
+// Fase 6 (P-07.2): Subsistema de Paños y Reparto de Cargas (`panyos3d.dll`)
+// ============================================================================
+
+const Panyo3d* Obra::find_panyo(std::uint32_t id) const noexcept {
+    for (const auto& p : estructura_.panyos) {
+        if (p.id == id) return &p;
+    }
+    return nullptr;
+}
+
+Panyo3d* Obra::find_panyo_mut(std::uint32_t id) noexcept {
+    for (auto& p : estructura_.panyos) {
+        if (p.id == id) return &p;
+    }
+    return nullptr;
+}
+
+bool Obra::delete_panyo(std::uint32_t panyo_id) {
+    auto it = std::find_if(estructura_.panyos.begin(), estructura_.panyos.end(),
+                           [panyo_id](const Panyo3d& p) { return p.id == panyo_id; });
+    if (it == estructura_.panyos.end()) return false;
+
+    estructura_.panyos.erase(it);
+    estructura_.cargas_superficiales.erase(
+        std::remove_if(estructura_.cargas_superficiales.begin(), estructura_.cargas_superficiales.end(),
+                       [panyo_id](const CargaSuperficialPanyo& c) { return c.panyo_id == panyo_id; }),
+        estructura_.cargas_superficiales.end());
+    estructura_.cargas_lineales.erase(
+        std::remove_if(estructura_.cargas_lineales.begin(), estructura_.cargas_lineales.end(),
+                       [panyo_id](const CargaLinealBarra& cl) {
+                           return cl.generada_por_panyo && cl.panyo_origen_id == panyo_id;
+                       }),
+        estructura_.cargas_lineales.end());
+    return true;
+}
+
+bool Obra::move_panyo(std::uint32_t panyo_id, const core::Vec3d& delta) {
+    Panyo3d* p = find_panyo_mut(panyo_id);
+    if (!p) return false;
+    for (auto& v : p->vertices) {
+        v = v + delta;
+    }
+    return true;
+}
+
+bool Obra::set_direccion_reparto_panyo(std::uint32_t panyo_id, const core::Vec3d& direccion) {
+    Panyo3d* p = find_panyo_mut(panyo_id);
+    if (!p || direccion.norm_sq() < 1e-12) return false;
+    p->direccion_reparto = direccion.normalized();
+    return true;
+}
+
+std::pair<std::uint32_t, std::uint32_t> Obra::dividir_panyo(
+    std::uint32_t panyo_id,
+    std::size_t idx_vertice_a,
+    std::size_t idx_vertice_b
+) {
+    const Panyo3d* p = find_panyo(panyo_id);
+    if (!p || p->vertices.size() < 4) return {0, 0};
+    if (idx_vertice_a >= p->vertices.size() || idx_vertice_b >= p->vertices.size()) return {0, 0};
+    if (idx_vertice_a > idx_vertice_b) std::swap(idx_vertice_a, idx_vertice_b);
+    if (idx_vertice_b - idx_vertice_a < 2) return {0, 0};
+
+    std::vector<core::Vec3d> poly1;
+    for (std::size_t i = idx_vertice_a; i <= idx_vertice_b; ++i) {
+        poly1.push_back(p->vertices[i]);
+    }
+    std::vector<core::Vec3d> poly2;
+    for (std::size_t i = idx_vertice_b; i < p->vertices.size(); ++i) {
+        poly2.push_back(p->vertices[i]);
+    }
+    for (std::size_t i = 0; i <= idx_vertice_a; ++i) {
+        poly2.push_back(p->vertices[i]);
+    }
+
+    const core::Vec3d dir = p->direccion_reparto;
+    const std::uint32_t capa = p->capa_id;
+    delete_panyo(panyo_id);
+    const auto id1 = add_panyo(poly1, dir, capa);
+    const auto id2 = add_panyo(poly2, dir, capa);
+    return {id1, id2};
+}
+
+std::size_t Obra::actualizar_reparto_cargas_panyos_a_barras() {
+    // Limpiar cargas lineales previamente generadas automáticamente por paños
+    estructura_.cargas_lineales.erase(
+        std::remove_if(estructura_.cargas_lineales.begin(), estructura_.cargas_lineales.end(),
+                       [](const CargaLinealBarra& cl) { return cl.generada_por_panyo; }),
+        estructura_.cargas_lineales.end());
+
+    std::size_t generadas_count = 0;
+    for (const auto& panyo : estructura_.panyos) {
+        const auto nuevas = PanelLoadDistributionEngine::descomponer_cargas_panyo_en_barras(
+            panyo, estructura_.cargas_superficiales, estructura_.barras, estructura_.nudos);
+        for (auto cl : nuevas) {
+            cl.id = estructura_.next_carga_lin_id++;
+            estructura_.cargas_lineales.push_back(std::move(cl));
+            ++generadas_count;
+        }
+    }
+    return generadas_count;
+}
+
+// ============================================================================
+// Fase 7 (P-08.1): Gestión de Cargas en Nudos, Barras, Láminas y Paños (`ed3dlib.dll`, `calcesf.dll`)
+// ============================================================================
+
+bool Obra::editar_carga_nudo(std::uint32_t carga_id, const core::Vec3d& fuerzas_kn, const core::Vec3d& momentos_knm) {
+    for (auto& cn : estructura_.cargas_nudos) {
+        if (cn.id == carga_id) {
+            cn.fuerzas_kn = fuerzas_kn;
+            cn.momentos_knm = momentos_knm;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Obra::delete_carga_nudo(std::uint32_t carga_id) {
+    auto it = std::find_if(estructura_.cargas_nudos.begin(), estructura_.cargas_nudos.end(),
+                           [carga_id](const CargaPuntualNudo& c) { return c.id == carga_id; });
+    if (it == estructura_.cargas_nudos.end()) return false;
+    estructura_.cargas_nudos.erase(it);
+    return true;
+}
+
+bool Obra::cambiar_hipotesis_carga_nudo(std::uint32_t carga_id, std::uint32_t nueva_hipotesis_id) {
+    for (auto& cn : estructura_.cargas_nudos) {
+        if (cn.id == carga_id) {
+            cn.hipotesis_id = nueva_hipotesis_id;
+            return true;
+        }
+    }
+    return false;
+}
+
+std::uint32_t Obra::add_carga_especial_barra(const CargaLinealBarra& carga) {
+    CargaLinealBarra copy = carga;
+    copy.id = estructura_.next_carga_lin_id++;
+    estructura_.cargas_lineales.push_back(std::move(copy));
+    return estructura_.cargas_lineales.back().id;
+}
+
+bool Obra::delete_carga_barra(std::uint32_t carga_id) {
+    auto it = std::find_if(estructura_.cargas_lineales.begin(), estructura_.cargas_lineales.end(),
+                           [carga_id](const CargaLinealBarra& c) { return c.id == carga_id; });
+    if (it == estructura_.cargas_lineales.end()) return false;
+    estructura_.cargas_lineales.erase(it);
+    return true;
+}
+
+bool Obra::cambiar_hipotesis_carga_barra(std::uint32_t carga_id, std::uint32_t nueva_hipotesis_id) {
+    for (auto& cb : estructura_.cargas_lineales) {
+        if (cb.id == carga_id) {
+            cb.hipotesis_id = nueva_hipotesis_id;
+            return true;
+        }
+    }
+    return false;
+}
+
+std::uint32_t Obra::add_carga_lamina(const CargaLamina3d& carga) {
+    CargaLamina3d copy = carga;
+    copy.id = estructura_.next_carga_lamina_id++;
+    estructura_.cargas_laminas.push_back(std::move(copy));
+    return estructura_.cargas_laminas.back().id;
+}
+
+bool Obra::delete_carga_lamina(std::uint32_t carga_id) {
+    auto it = std::find_if(estructura_.cargas_laminas.begin(), estructura_.cargas_laminas.end(),
+                           [carga_id](const CargaLamina3d& c) { return c.id == carga_id; });
+    if (it == estructura_.cargas_laminas.end()) return false;
+    estructura_.cargas_laminas.erase(it);
+    return true;
+}
+
+bool Obra::cambiar_hipotesis_carga_lamina(std::uint32_t carga_id, std::uint32_t nueva_hipotesis_id) {
+    for (auto& cl : estructura_.cargas_laminas) {
+        if (cl.id == carga_id) {
+            cl.hipotesis_id = nueva_hipotesis_id;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Obra::delete_carga_superficial_panyo(std::uint32_t carga_id) {
+    auto it = std::find_if(estructura_.cargas_superficiales.begin(), estructura_.cargas_superficiales.end(),
+                           [carga_id](const CargaSuperficialPanyo& c) { return c.id == carga_id; });
+    if (it == estructura_.cargas_superficiales.end()) return false;
+    estructura_.cargas_superficiales.erase(it);
+    return true;
+}
+
+bool Obra::cambiar_hipotesis_carga_superficial_panyo(std::uint32_t carga_id, std::uint32_t nueva_hipotesis_id) {
+    for (auto& cs : estructura_.cargas_superficiales) {
+        if (cs.id == carga_id) {
+            cs.hipotesis_id = nueva_hipotesis_id;
+            return true;
+        }
+    }
+    return false;
+}
+
 void Obra::write_binary(io::BinaryWriter& writer) const {
     writer.write_header();
 

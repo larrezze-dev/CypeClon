@@ -328,6 +328,24 @@ bool AppWindow::execute_command(std::string_view command_id) {
         return true;
     }
 
+    // Comandos de Fase 6 y Fase 7 (Láminas, Paños y Cargas)
+    if (command_id == "Carga_hipotesis_vista") {
+        auto& vis = obra_.estructura_mut().config_vis_cargas;
+        const auto& hips = obra_.estructura().hipotesis;
+        if (!hips.empty()) {
+            vis.hipotesis_activa_vista_id = (vis.hipotesis_activa_vista_id % static_cast<std::uint32_t>(hips.size())) + 1;
+        }
+        status_bar_text_ = "Hipótesis de carga activa en vista: ID " + std::to_string(vis.hipotesis_activa_vista_id);
+        return true;
+    }
+    if (command_id == "Carga_escalas") {
+        const auto& vis = obra_.estructura().config_vis_cargas;
+        status_bar_text_ = "Escalas de dibujo de cargas (Puntual=" + std::to_string(vis.escala_cargas_puntuales) +
+                           ", Lineal=" + std::to_string(vis.escala_cargas_lineales) +
+                           ", Superficial=" + std::to_string(vis.escala_cargas_superficiales) + ")";
+        return true;
+    }
+
     status_bar_text_ = "Ejecutado comando: " + item->label + " (" + item->id + ")";
     return true;
 }
