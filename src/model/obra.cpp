@@ -7,6 +7,10 @@ namespace cypeclon::model {
 Obra::Obra() {
     estructura_.capas.push_back(EtiquetaCapa{1, "Por defecto", true, false, 0x0080FF});
     estructura_.rejillas.push_back(RejillaTrabajo{});
+    add_hipotesis_carga("PP", "Peso propio", 0, 0, 0, 0, true);
+    add_hipotesis_carga("CM", "Cargas muertas", 1, 0, 0, 0, true);
+    add_hipotesis_carga("Q1", "Sobrecarga de uso", 2, 0, 0, 0, true);
+    undo_redo_.clear();
 }
 
 std::uint32_t Obra::add_nudo(const core::Vec3d& pos, VinculacionExterior vinc) {
@@ -165,6 +169,95 @@ std::uint32_t Obra::add_etiqueta_capa(std::string_view nombre, std::uint32_t col
     const std::uint32_t assigned_id = estructura_.next_capa_id++;
     EtiquetaCapa cap{assigned_id, std::string(nombre), visible, bloqueada, color_rgb};
     estructura_.capas.push_back(std::move(cap));
+    return assigned_id;
+}
+
+std::uint32_t Obra::add_hipotesis_carga(
+    std::string_view codigo,
+    std::string_view descripcion,
+    std::uint8_t naturaleza,
+    std::uint8_t disposicion,
+    std::uint8_t categoria_uso,
+    std::uint32_t grupo_incompatibilidad,
+    bool es_automatica
+) {
+    const std::uint32_t assigned_id = estructura_.next_hipotesis_id++;
+    HipotesisCargaObra hip{
+        assigned_id,
+        std::string(codigo),
+        std::string(descripcion),
+        naturaleza,
+        disposicion,
+        categoria_uso,
+        grupo_incompatibilidad,
+        es_automatica,
+        true
+    };
+    estructura_.hipotesis.push_back(std::move(hip));
+    return assigned_id;
+}
+
+std::uint32_t Obra::add_carga_superficial_panyo(
+    std::uint32_t panyo_id,
+    std::uint32_t hipotesis_id,
+    double valor_kn_m2,
+    const core::Vec3d& direccion,
+    bool en_ejes_locales_panyo,
+    std::string_view descripcion_zona
+) {
+    const std::uint32_t assigned_id = estructura_.next_carga_sup_id++;
+    CargaSuperficialPanyo csup{
+        assigned_id,
+        panyo_id,
+        hipotesis_id,
+        valor_kn_m2,
+        direccion,
+        en_ejes_locales_panyo,
+        std::string(descripcion_zona)
+    };
+    estructura_.cargas_superficiales.push_back(std::move(csup));
+    return assigned_id;
+}
+
+std::uint32_t Obra::add_carga_lineal_barra(
+    std::uint32_t barra_id,
+    std::uint32_t hipotesis_id,
+    double q_ini_kn_m,
+    double q_fin_kn_m,
+    const core::Vec3d& direccion,
+    bool en_ejes_locales
+) {
+    const std::uint32_t assigned_id = estructura_.next_carga_lin_id++;
+    CargaLinealBarra clin{
+        assigned_id,
+        barra_id,
+        hipotesis_id,
+        q_ini_kn_m,
+        q_fin_kn_m,
+        0.0,
+        1.0,
+        direccion,
+        en_ejes_locales
+    };
+    estructura_.cargas_lineales.push_back(std::move(clin));
+    return assigned_id;
+}
+
+std::uint32_t Obra::add_carga_puntual_nudo(
+    std::uint32_t nudo_id,
+    std::uint32_t hipotesis_id,
+    const core::Vec3d& fuerzas_kn,
+    const core::Vec3d& momentos_knm
+) {
+    const std::uint32_t assigned_id = estructura_.next_carga_nudo_id++;
+    CargaPuntualNudo cnud{
+        assigned_id,
+        nudo_id,
+        hipotesis_id,
+        fuerzas_kn,
+        momentos_knm
+    };
+    estructura_.cargas_nudos.push_back(std::move(cnud));
     return assigned_id;
 }
 

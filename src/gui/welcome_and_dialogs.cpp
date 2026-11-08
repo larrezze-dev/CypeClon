@@ -144,18 +144,8 @@ bool AsistenteNuevaObra::apply_creation_mode(model::Obra& obra) const {
     }
 
     if (modo_ == ModoCreacionNuevaObra::GeneradorPorticos) {
-        // Generación automática inicial desde el Generador de Pórticos (ed3genport):
-        // Pórtico biempotrado a dos aguas (Luz = 12 m, Altura alero = 6 m, Cumbrera = 7.5 m)
-        const auto n1 = obra.add_nudo({0.0, 0.0, 0.0}, model::VinculacionExterior::Empotrado);
-        const auto n2 = obra.add_nudo({0.0, 0.0, 6.0}, model::VinculacionExterior::Libre);
-        const auto n3 = obra.add_nudo({6.0, 0.0, 7.5}, model::VinculacionExterior::Libre);
-        const auto n4 = obra.add_nudo({12.0, 0.0, 6.0}, model::VinculacionExterior::Libre);
-        const auto n5 = obra.add_nudo({12.0, 0.0, 0.0}, model::VinculacionExterior::Empotrado);
-
-        obra.add_barra(n1, n2, "IPE 300", "S275");
-        obra.add_barra(n2, n3, "IPE 270", "S275");
-        obra.add_barra(n3, n4, "IPE 270", "S275");
-        obra.add_barra(n4, n5, "IPE 300", "S275");
+        // Exportación completa desde el Generador de Pórticos (ed3genport -> ed3obra_append_datos_importacion_generador_porticos)
+        codes::PorticoGeneratorEngine::exportar_a_obra(cfg_porticos_, obra);
         return true;
     }
 
@@ -239,13 +229,72 @@ DialogoDatosGenerales::DialogoDatosGenerales() {
     };
 }
 
+void DialogoDatosGenerales::seleccionar_norma_familia(codes::FamiliaNormativa familia, std::string_view id_o_nombre) {
+    const auto* spec = codes::NormativaEngine::buscar_norma(familia, id_o_nombre);
+    if (!spec) return;
+
+    switch (familia) {
+        case codes::FamiliaNormativa::Hormigon:
+            draft_.norma_hormigon = spec->nombre_visible;
+            draft_.hormigon_estructural = spec->material_defecto;
+            draft_.hormigon_pilares = spec->material_defecto;
+            draft_.hormigon_vigas = spec->material_defecto;
+            draft_.hormigon_cimentacion = spec->material_defecto;
+            break;
+        case codes::FamiliaNormativa::AceroLaminado:
+            draft_.norma_acero_laminado = spec->nombre_visible;
+            draft_.acero_laminado = spec->material_defecto;
+            break;
+        case codes::FamiliaNormativa::AceroConformado:
+            draft_.norma_acero_conformado = spec->nombre_visible;
+            draft_.acero_conformado = spec->material_defecto;
+            break;
+        case codes::FamiliaNormativa::Madera:
+            draft_.norma_madera = spec->nombre_visible;
+            if (const auto* mad = codes::NormativaEngine::buscar_madera(spec->material_defecto)) {
+                draft_.madera = mad->descripcion_completa;
+            }
+            break;
+        case codes::FamiliaNormativa::Aluminio:
+            draft_.norma_aluminio = spec->nombre_visible;
+            draft_.aluminio = spec->material_defecto;
+            break;
+        case codes::FamiliaNormativa::Cimentacion:
+            draft_.norma_cimentacion = spec->nombre_visible;
+            break;
+    }
+
+    draft_.normas_resumen = codes::NormativaEngine::construir_resumen_normas(
+        draft_.norma_hormigon,
+        draft_.norma_acero_laminado,
+        draft_.norma_acero_conformado,
+        draft_.norma_madera,
+        draft_.norma_aluminio
+    );
+}
+
 void DialogoDatosGenerales::load_from_obra(const model::Obra& obra) {
     draft_ = obra.datos_generales();
+    cfg_sismo_.activo = draft_.con_sismo_dinamico;
+    cfg_sismo_.aceleracion_basica_ag_g = draft_.aceleracion_sismica_basica_g;
+    cfg_sismo_.factor_comportamiento_qx = draft_.factor_ductilidad_q;
+    cfg_sismo_.factor_comportamiento_qy = draft_.factor_ductilidad_q;
+    cfg_sismo_.numero_modos_manual = draft_.modos_vibracion_sismo;
+    cfg_sismo_.comprobar_cortante_basal = draft_.comprobar_cortante_basal;
+    cfg_fuego_.comprobar_resistencia_fuego = draft_.resistencia_al_fuego_activa;
     dlg_estados_limite_.load_from_obra(obra);
 }
 
 void DialogoDatosGenerales::apply_to_obra(model::Obra& obra) const {
-    obra.datos_generales_mut() = draft_;
+    auto copy_draft = draft_;
+    copy_draft.con_sismo_dinamico = cfg_sismo_.activo || draft_.con_sismo_dinamico;
+    copy_draft.aceleracion_sismica_basica_g = cfg_sismo_.aceleracion_basica_ag_g;
+    copy_draft.factor_ductilidad_q = cfg_sismo_.factor_comportamiento_qx;
+    copy_draft.modos_vibracion_sismo = cfg_sismo_.numero_modos_manual;
+    copy_draft.comprobar_cortante_basal = cfg_sismo_.comprobar_cortante_basal;
+    copy_draft.resistencia_al_fuego_activa = cfg_fuego_.comprobar_resistencia_fuego || draft_.resistencia_al_fuego_activa;
+    copy_draft.clase_resistencia_fuego = cfg_fuego_.etiqueta_clase();
+    obra.datos_generales_mut() = std::move(copy_draft);
     dlg_estados_limite_.apply_to_obra(obra);
 }
 

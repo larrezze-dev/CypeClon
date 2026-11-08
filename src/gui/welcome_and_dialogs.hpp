@@ -1,5 +1,6 @@
 #pragma once
 
+#include "codes/normativa_engine.hpp"
 #include "gui/docking_system.hpp"
 #include "gui/theme_palette.hpp"
 #include "model/obra.hpp"
@@ -157,6 +158,9 @@ public:
     // Previsualización vectorial 3D en CypeAreaDibujo (629, 384, 672x320)
     const std::vector<WireframeSegment3d>& preview_wireframe_3d() const noexcept { return preview_segments_; }
 
+    codes::ConfiguracionGeneradorPorticos& config_generador_porticos_mut() noexcept { return cfg_porticos_; }
+    const codes::ConfiguracionGeneradorPorticos& config_generador_porticos() const noexcept { return cfg_porticos_; }
+
     // Aplica la inicialización geométrica según el modo seleccionado (Vacía / IFC / DXF / Generador de Pórticos)
     bool apply_creation_mode(model::Obra& obra) const;
 
@@ -173,6 +177,7 @@ private:
     ModoCreacionNuevaObra modo_{ModoCreacionNuevaObra::ObraVacia};
     std::string ruta_importacion_;
     std::string proyecto_bimserver_id_;
+    codes::ConfiguracionGeneradorPorticos cfg_porticos_{};
     std::vector<WireframeSegment3d> preview_segments_;
 };
 
@@ -229,6 +234,18 @@ public:
     DialogoEstadosLimite& dialogo_estados_limite() noexcept { return dlg_estados_limite_; }
     const DialogoEstadosLimite& dialogo_estados_limite() const noexcept { return dlg_estados_limite_; }
 
+    /// Cambia la norma de una familia y reinicia el material por defecto (`ed3matob_reinicia_*_por_cambio_norma`)
+    void seleccionar_norma_familia(codes::FamiliaNormativa familia, std::string_view id_o_nombre);
+
+    codes::ConfiguracionSismo& config_sismo_mut() noexcept { return cfg_sismo_; }
+    const codes::ConfiguracionSismo& config_sismo() const noexcept { return cfg_sismo_; }
+
+    codes::ConfiguracionViento& config_viento_mut() noexcept { return cfg_viento_; }
+    const codes::ConfiguracionViento& config_viento() const noexcept { return cfg_viento_; }
+
+    codes::ConfiguracionResistenciaFuego& config_fuego_mut() noexcept { return cfg_fuego_; }
+    const codes::ConfiguracionResistenciaFuego& config_fuego() const noexcept { return cfg_fuego_; }
+
     const std::vector<std::string>& botones_acciones() const noexcept { return botones_acciones_; }
     const std::vector<std::string>& botones_opciones() const noexcept { return botones_opciones_; }
     const std::vector<std::string>& catalogo_aceros_laminados() const noexcept { return cat_acero_laminado_; }
@@ -244,6 +261,9 @@ private:
     PestanaPilotesTerreno pestana_terreno_{PestanaPilotesTerreno::PilotesHormigonArmado};
     model::DatosGeneralesObra draft_{};
     DialogoEstadosLimite dlg_estados_limite_{};
+    codes::ConfiguracionSismo cfg_sismo_{};
+    codes::ConfiguracionViento cfg_viento_{};
+    codes::ConfiguracionResistenciaFuego cfg_fuego_{};
 
     std::vector<std::string> botones_acciones_;
     std::vector<std::string> botones_opciones_;

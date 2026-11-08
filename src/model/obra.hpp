@@ -71,6 +71,60 @@ struct Panyo3d {
 };
 
 /**
+ * @brief Hipótesis de carga almacenada en la Obra (`ghipocal.dll` / `combs3.dll`).
+ */
+struct HipotesisCargaObra {
+    std::uint32_t id{1};
+    std::string codigo{"PP"};
+    std::string descripcion{"Peso propio"};
+    std::uint8_t naturaleza{0};        ///< 0=PesoPropio, 1=CargasMuertas, 2=SobrecargaUso, 3=Viento, 4=Sismo, 5=Nieve, 6=Temp, 7=Terreno, 8=Accidental, 9=Fuego
+    std::uint8_t disposicion{0};       ///< 0=Simultanea, 1=Compatible, 2=Incompatible
+    std::uint8_t categoria_uso{0};     ///< CodigoCategoriaUso (G1=0, A=1, B=2, C=3, D=4, E=5, F=6, G=7)
+    std::uint32_t grupo_incompatibilidad{0};
+    bool es_automatica{true};
+    bool actua{true};
+};
+
+/**
+ * @brief Carga superficial sobre un Paño 3D (`ed3genport_append_superficie_carga` / `panyos3d.dll`).
+ */
+struct CargaSuperficialPanyo {
+    std::uint32_t id{0};
+    std::uint32_t panyo_id{0};
+    std::uint32_t hipotesis_id{1};
+    double valor_kn_m2{0.0};           ///< Magnitud de la carga superficial (kN/m^2)
+    core::Vec3d direccion{0.0, 0.0, -1.0}; ///< Vector director (p.ej. {0,0,-1} gravitatoria o normal al paño para viento)
+    bool en_ejes_locales_panyo{false};
+    std::string descripcion_zona;      ///< p.ej. "Cubierta Zona F", "Fachada Barlovento D"
+};
+
+/**
+ * @brief Carga lineal uniforme/trapezoidal sobre una Barra 3D (`ed3genport_append_carga_a_ultima_barra`).
+ */
+struct CargaLinealBarra {
+    std::uint32_t id{0};
+    std::uint32_t barra_id{0};
+    std::uint32_t hipotesis_id{1};
+    double q_ini_kn_m{0.0};            ///< Valor inicial de carga lineal (kN/m)
+    double q_fin_kn_m{0.0};            ///< Valor final de carga lineal (kN/m)
+    double x_ini_rel{0.0};             ///< Posición relativa inicial [0..1]
+    double x_fin_rel{1.0};             ///< Posición relativa final [0..1]
+    core::Vec3d direccion{0.0, 0.0, -1.0};
+    bool en_ejes_locales{false};
+};
+
+/**
+ * @brief Carga puntual en Nudo 3D (`ed3obra_append_listado_cargas_nudos_a_documento`).
+ */
+struct CargaPuntualNudo {
+    std::uint32_t id{0};
+    std::uint32_t nudo_id{0};
+    std::uint32_t hipotesis_id{1};
+    core::Vec3d fuerzas_kn{0.0, 0.0, 0.0};    ///< Fx, Fy, Fz (kN)
+    core::Vec3d momentos_knm{0.0, 0.0, 0.0};  ///< Mx, My, Mz (kN·m)
+};
+
+/**
  * @brief Nivel o planta horizontal de edificación equivalente a `ed3planta` / `pngrupla.dll`.
  */
 struct NivelPlanta {
@@ -131,6 +185,14 @@ struct DatosGeneralesObra {
     std::string descripcion{"Obra de CYPE 3D"};
     units::UnitSystem sistema_unidades{units::UnitSystem::SI};
 
+    // Selección individual de normativas por familia (`cypenorma.dll`)
+    std::string norma_hormigon{"Eurocódigo 2"};
+    std::string norma_acero_laminado{"CTE DB SE-A"};
+    std::string norma_acero_conformado{"Código Estructural"};
+    std::string norma_madera{"CTE DB SE-M"};
+    std::string norma_aluminio{"Eurocódigo 9"};
+    std::string norma_cimentacion{"CTE DB SE-C"};
+
     // Normas y materiales por defecto (04_after_wizard_aceptar.png / 14_dialog_datos_generales.png)
     std::string normas_resumen{"Eurocódigo 2, CTE DB SE-A, Código Estructural, CTE DB SE-M y Eurocódigo 9"};
     std::string acero_laminado{"S275 (UNE-EN 10025-2)"};
@@ -138,6 +200,7 @@ struct DatosGeneralesObra {
     std::string madera{"Aserrada, procedente de coníferas o chopo (C24)"};
     std::string aluminio{"EN AW-5083 - F"};
     std::string hormigon_estructural{"C25/30"};
+    std::string calidad_pernos{"8.8"};
 
     // Bloque Hormigón armado (columna derecha)
     std::string hormigon_pilares{"C25/30"};
@@ -147,9 +210,18 @@ struct DatosGeneralesObra {
     std::string caracteristicas_arido{"Cuarcita (15 mm), 30 mm"};
     std::string ambiente_vigas{"X0"};
 
-    // Acciones y Terreno de cimentación
+    // Acciones (Sismo, Viento, Fuego) y Terreno de cimentación
     bool con_sismo_dinamico{false};
+    std::string norma_sismo{"NCSE-02"};
+    double aceleracion_sismica_basica_g{0.12};
+    double factor_ductilidad_q{2.0};
+    std::uint32_t modos_vibracion_sismo{6};
+    bool comprobar_cortante_basal{true};
+
     bool resistencia_al_fuego_activa{false};
+    std::string clase_resistencia_fuego{"R 60"};
+    std::string revestimiento_fuego_acero{"Pintura intumescente"};
+
     bool proceso_constructivo_activo{false};
     bool verificar_deslizamiento_zapatas{true};
     double tension_terreno_persistente_mpa{0.200};
@@ -169,12 +241,21 @@ struct EstructuraDatos {
     std::vector<NivelPlanta> niveles;
     std::vector<RejillaTrabajo> rejillas;
     std::vector<EtiquetaCapa> capas;
+    std::vector<HipotesisCargaObra> hipotesis;
+    std::vector<CargaSuperficialPanyo> cargas_superficiales;
+    std::vector<CargaLinealBarra> cargas_lineales;
+    std::vector<CargaPuntualNudo> cargas_nudos;
+
     std::uint32_t next_nudo_id{1};
     std::uint32_t next_barra_id{1};
     std::uint32_t next_lamina_id{1};
     std::uint32_t next_panyo_id{1};
     std::uint32_t next_nivel_id{1};
     std::uint32_t next_capa_id{2};
+    std::uint32_t next_hipotesis_id{1};
+    std::uint32_t next_carga_sup_id{1};
+    std::uint32_t next_carga_lin_id{1};
+    std::uint32_t next_carga_nudo_id{1};
 };
 
 enum class TipoElementoCimentacion : std::uint8_t {
@@ -244,6 +325,33 @@ public:
     std::uint32_t add_panyo(const std::vector<core::Vec3d>& vertices, const core::Vec3d& dir_reparto = {1.0, 0.0, 0.0}, std::uint32_t capa_id = 1);
     std::uint32_t add_nivel_planta(std::string_view nombre, double cota_z_m, double altura_m = 3.0, std::uint32_t grupo_id = 1);
     std::uint32_t add_etiqueta_capa(std::string_view nombre, std::uint32_t color_rgb = 0x0080FF, bool visible = true, bool bloqueada = false);
+    std::uint32_t add_hipotesis_carga(
+        std::string_view codigo,
+        std::string_view descripcion,
+        std::uint8_t naturaleza = 0,
+        std::uint8_t disposicion = 0,
+        std::uint8_t categoria_uso = 0,
+        std::uint32_t grupo_incompatibilidad = 0,
+        bool es_automatica = false);
+    std::uint32_t add_carga_superficial_panyo(
+        std::uint32_t panyo_id,
+        std::uint32_t hipotesis_id,
+        double valor_kn_m2,
+        const core::Vec3d& direccion = {0.0, 0.0, -1.0},
+        bool en_ejes_locales_panyo = false,
+        std::string_view descripcion_zona = "");
+    std::uint32_t add_carga_lineal_barra(
+        std::uint32_t barra_id,
+        std::uint32_t hipotesis_id,
+        double q_ini_kn_m,
+        double q_fin_kn_m,
+        const core::Vec3d& direccion = {0.0, 0.0, -1.0},
+        bool en_ejes_locales = false);
+    std::uint32_t add_carga_puntual_nudo(
+        std::uint32_t nudo_id,
+        std::uint32_t hipotesis_id,
+        const core::Vec3d& fuerzas_kn,
+        const core::Vec3d& momentos_knm = {0.0, 0.0, 0.0});
     std::uint32_t add_elemento_cimentacion(TipoElementoCimentacion tipo, std::uint32_t nudo_arranque_id, double ancho_x = 1.20, double ancho_y = 1.20, double canto = 0.50);
 
     const Nudo3d* find_nudo(std::uint32_t id) const noexcept;

@@ -5,12 +5,13 @@
 #include <iostream>
 #include <stdexcept>
 
-// Declaraciones de suites de prueba de Fases 1, 2 y 3
+// Declaraciones de suites de prueba de Fases 1, 2, 3 y 4
 void run_math_tests();
 void run_units_tests();
 void run_io_undoredo_tests();
 void run_gui_phase2_tests();
 void run_cad_phase3_tests();
+void run_codes_phase4_tests();
 
 namespace {
 
@@ -70,25 +71,28 @@ void run_memory_and_string_tests() {
 } // namespace
 
 int main() {
-    std::cout << "=== Ejecutando Suite de Pruebas Unitarias CypeClon (Fases 1, 2 y 3) ===\n";
+    std::cout << "=== Ejecutando Suite de Pruebas Unitarias CypeClon (Fases 1, 2, 3 y 4) ===" << std::endl;
     run_memory_and_string_tests();
-    std::cout << "[PASS] cypemem + cypestr\n";
+    std::cout << "[PASS] cypemem + cypestr" << std::endl;
 
     run_math_tests();
-    std::cout << "[PASS] cypemath + ejes2d + geometria 2D/3D\n";
+    std::cout << "[PASS] cypemath + ejes2d + geometria 2D/3D" << std::endl;
 
     run_units_tests();
-    std::cout << "[PASS] unidades + cypeud + cyudconf (SI / MKS / Imperial)\n";
+    std::cout << "[PASS] unidades + cypeud + cyudconf (SI / MKS / Imperial)" << std::endl;
 
     run_io_undoredo_tests();
-    std::cout << "[PASS] cypesave (Binario + JSON) + undoredo + Obra + Octree3d\n";
+    std::cout << "[PASS] cypesave (Binario + JSON) + undoredo + Obra + Octree3d" << std::endl;
 
     run_gui_phase2_tests();
-    std::cout << "[PASS] Fase 2 GUI: entograf + componen + panelwin + ribbon + entomenu + ed3dlib + planocim\n";
+    std::cout << "[PASS] Fase 2 GUI: entograf + componen + panelwin + ribbon + entomenu + ed3dlib + planocim" << std::endl;
 
     run_cad_phase3_tests();
-    std::cout << "[PASS] Fase 3 CAD/MDI: dispoMDI + pndibposecam + ebaobcap + dxflib + cyplanobj + cyhlr + vistas3d\n";
+    std::cout << "[PASS] Fase 3 CAD/MDI: dispoMDI + pndibposecam + ebaobcap + dxflib + cyplanobj + cyhlr + vistas3d" << std::endl;
 
-    std::cout << "=== TODAS LAS PRUEBAS DE FASES 1, 2 Y 3 SUPERADAS CON EXITO ===\n";
+    run_codes_phase4_tests();
+    std::cout << "[PASS] Fase 4 Normas/Materiales/Acciones/Porticos: cypenorma + datmater + sestlim + combs + sismo + veviento + rstfuego + ed3genport" << std::endl;
+
+    std::cout << "=== TODAS LAS PRUEBAS DE FASES 1, 2, 3 Y 4 SUPERADAS CON EXITO ===" << std::endl;
     return 0;
 }
