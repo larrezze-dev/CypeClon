@@ -6,6 +6,7 @@ namespace cypeclon::model {
 
 Obra::Obra() {
     estructura_.capas.push_back(EtiquetaCapa{1, "Por defecto", true, false, 0x0080FF});
+    estructura_.rejillas.push_back(RejillaTrabajo{});
 }
 
 std::uint32_t Obra::add_nudo(const core::Vec3d& pos, VinculacionExterior vinc) {
@@ -118,10 +119,69 @@ const Barra3d* Obra::find_barra(std::uint32_t id) const noexcept {
     return nullptr;
 }
 
+Barra3d* Obra::find_barra_mut(std::uint32_t id) noexcept {
+    for (auto& b : estructura_.barras) {
+        if (b.id == id) return &b;
+    }
+    return nullptr;
+}
+
+const EtiquetaCapa* Obra::find_capa(std::uint32_t id) const noexcept {
+    for (const auto& c : estructura_.capas) {
+        if (c.id == id) return &c;
+    }
+    return nullptr;
+}
+
+EtiquetaCapa* Obra::find_capa_mut(std::uint32_t id) noexcept {
+    for (auto& c : estructura_.capas) {
+        if (c.id == id) return &c;
+    }
+    return nullptr;
+}
+
+std::uint32_t Obra::add_lamina(const std::vector<core::Vec3d>& vertices, double espesor_m, std::string_view material, std::uint32_t capa_id) {
+    const std::uint32_t assigned_id = estructura_.next_lamina_id++;
+    Lamina3d lam{assigned_id, vertices, espesor_m, std::string(material), capa_id};
+    estructura_.laminas.push_back(std::move(lam));
+    return assigned_id;
+}
+
+std::uint32_t Obra::add_panyo(const std::vector<core::Vec3d>& vertices, const core::Vec3d& dir_reparto, std::uint32_t capa_id) {
+    const std::uint32_t assigned_id = estructura_.next_panyo_id++;
+    Panyo3d pan{assigned_id, vertices, dir_reparto, capa_id};
+    estructura_.panyos.push_back(std::move(pan));
+    return assigned_id;
+}
+
+std::uint32_t Obra::add_nivel_planta(std::string_view nombre, double cota_z_m, double altura_m, std::uint32_t grupo_id) {
+    const std::uint32_t assigned_id = estructura_.next_nivel_id++;
+    NivelPlanta niv{assigned_id, std::string(nombre), cota_z_m, altura_m, grupo_id, true};
+    estructura_.niveles.push_back(std::move(niv));
+    return assigned_id;
+}
+
+std::uint32_t Obra::add_etiqueta_capa(std::string_view nombre, std::uint32_t color_rgb, bool visible, bool bloqueada) {
+    const std::uint32_t assigned_id = estructura_.next_capa_id++;
+    EtiquetaCapa cap{assigned_id, std::string(nombre), visible, bloqueada, color_rgb};
+    estructura_.capas.push_back(std::move(cap));
+    return assigned_id;
+}
+
 core::BBox3d Obra::bounding_box() const noexcept {
     core::BBox3d box;
     for (const auto& n : estructura_.nudos) {
         box.expand(n.pos);
+    }
+    for (const auto& lam : estructura_.laminas) {
+        for (const auto& v : lam.vertices) {
+            box.expand(v);
+        }
+    }
+    for (const auto& pan : estructura_.panyos) {
+        for (const auto& v : pan.vertices) {
+            box.expand(v);
+        }
     }
     return box;
 }

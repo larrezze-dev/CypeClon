@@ -140,6 +140,7 @@ add_executable(cypeclon_core_tests
     tests/test_units.cpp
     tests/test_io_undoredo.cpp
     tests/test_gui_phase2.cpp
+    tests/test_cad_phase3.cpp
 )
 target_link_libraries(cypeclon_core_tests PRIVATE
     cypeclon_gui

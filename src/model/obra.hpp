@@ -25,12 +25,20 @@ enum class VinculacionExterior : std::uint8_t {
     ApoyoElastico
 };
 
+enum class TipoBarraEstructural : std::uint8_t {
+    Generica = 0,
+    ColumnaPilar = 1,
+    Viga = 2,
+    Tirante = 3
+};
+
 struct Nudo3d {
     std::uint32_t id{0};
     core::Vec3d pos{0.0, 0.0, 0.0};
     std::string referencia;
     VinculacionExterior vinc_ext{VinculacionExterior::Libre};
     bool empotrado_interior{true};
+    std::uint32_t capa_id{1};
 };
 
 struct Barra3d {
@@ -42,6 +50,48 @@ struct Barra3d {
     double angulo_giro_rad{0.0};
     bool es_tirante{false};
     std::uint32_t capa_id{1};
+    TipoBarraEstructural tipo_estructural{TipoBarraEstructural::Generica};
+    double desp_y_m{0.0};  ///< Desplazamiento/enrase local Y (m)
+    double desp_z_m{0.0};  ///< Desplazamiento/enrase local Z (m)
+};
+
+struct Lamina3d {
+    std::uint32_t id{0};
+    std::vector<core::Vec3d> vertices;
+    double espesor_m{0.20};
+    std::string material{"C25/30"};
+    std::uint32_t capa_id{1};
+};
+
+struct Panyo3d {
+    std::uint32_t id{0};
+    std::vector<core::Vec3d> vertices;
+    core::Vec3d direccion_reparto{1.0, 0.0, 0.0};
+    std::uint32_t capa_id{1};
+};
+
+/**
+ * @brief Nivel o planta horizontal de edificación equivalente a `ed3planta` / `pngrupla.dll`.
+ */
+struct NivelPlanta {
+    std::uint32_t id{0};
+    std::string nombre{"Planta 1"};
+    double cota_z_m{0.0};
+    double altura_m{3.0};
+    std::uint32_t grupo_id{1};
+    bool visible{true};
+};
+
+/**
+ * @brief Rejilla de referencia espacial equivalente a `Planos_Rejilla` (`ed3mnugeo.c`).
+ */
+struct RejillaTrabajo {
+    std::uint32_t id{1};
+    std::string nombre{"Rejilla general"};
+    core::Vec3d origen{0.0, 0.0, 0.0};
+    std::vector<double> coordenadas_x{-10.0, -5.0, 0.0, 5.0, 10.0};
+    std::vector<double> coordenadas_y{-10.0, -5.0, 0.0, 5.0, 10.0};
+    bool visible{true};
 };
 
 struct EtiquetaCapa {
@@ -114,9 +164,17 @@ struct EstructuraDatos {
     // Equivalente a ed3datos_t en ed3dlib.dll
     std::vector<Nudo3d> nudos;
     std::vector<Barra3d> barras;
+    std::vector<Lamina3d> laminas;
+    std::vector<Panyo3d> panyos;
+    std::vector<NivelPlanta> niveles;
+    std::vector<RejillaTrabajo> rejillas;
     std::vector<EtiquetaCapa> capas;
     std::uint32_t next_nudo_id{1};
     std::uint32_t next_barra_id{1};
+    std::uint32_t next_lamina_id{1};
+    std::uint32_t next_panyo_id{1};
+    std::uint32_t next_nivel_id{1};
+    std::uint32_t next_capa_id{2};
 };
 
 enum class TipoElementoCimentacion : std::uint8_t {
@@ -182,10 +240,17 @@ public:
     std::uint32_t add_nudo(const core::Vec3d& pos, VinculacionExterior vinc = VinculacionExterior::Libre);
     bool move_nudo(std::uint32_t nudo_id, const core::Vec3d& new_pos);
     std::uint32_t add_barra(std::uint32_t nudo_ini, std::uint32_t nudo_fin, std::string_view perfil = "IPE 200", std::string_view material = "S275");
+    std::uint32_t add_lamina(const std::vector<core::Vec3d>& vertices, double espesor_m = 0.20, std::string_view material = "C25/30", std::uint32_t capa_id = 1);
+    std::uint32_t add_panyo(const std::vector<core::Vec3d>& vertices, const core::Vec3d& dir_reparto = {1.0, 0.0, 0.0}, std::uint32_t capa_id = 1);
+    std::uint32_t add_nivel_planta(std::string_view nombre, double cota_z_m, double altura_m = 3.0, std::uint32_t grupo_id = 1);
+    std::uint32_t add_etiqueta_capa(std::string_view nombre, std::uint32_t color_rgb = 0x0080FF, bool visible = true, bool bloqueada = false);
     std::uint32_t add_elemento_cimentacion(TipoElementoCimentacion tipo, std::uint32_t nudo_arranque_id, double ancho_x = 1.20, double ancho_y = 1.20, double canto = 0.50);
 
     const Nudo3d* find_nudo(std::uint32_t id) const noexcept;
     const Barra3d* find_barra(std::uint32_t id) const noexcept;
+    Barra3d* find_barra_mut(std::uint32_t id) noexcept;
+    const EtiquetaCapa* find_capa(std::uint32_t id) const noexcept;
+    EtiquetaCapa* find_capa_mut(std::uint32_t id) noexcept;
     core::BBox3d bounding_box() const noexcept;
 
     // Serialización binaria (.ed3 via cypesave) y JSON

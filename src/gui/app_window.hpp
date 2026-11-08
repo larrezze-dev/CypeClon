@@ -1,5 +1,6 @@
 #pragma once
 
+#include "cad/cad_engine.hpp"
 #include "gui/docking_system.hpp"
 #include "gui/ribbon_catalog.hpp"
 #include "gui/theme_palette.hpp"
@@ -60,6 +61,28 @@ public:
     DialogoDatosGenerales& dlg_datos_generales() noexcept { return dlg_datos_generales_; }
     const DialogoDatosGenerales& dlg_datos_generales() const noexcept { return dlg_datos_generales_; }
 
+    // Submódulos de Fase 3: Motor CAD 2D/3D y Gestión de Vistas MDI (P-04.1, P-04.2, P-04.3)
+    cad::MdiViewManager& mdi_manager() noexcept { return mdi_manager_; }
+    const cad::MdiViewManager& mdi_manager() const noexcept { return mdi_manager_; }
+
+    cad::CadPicker& picker() noexcept { return picker_; }
+    const cad::CadPicker& picker() const noexcept { return picker_; }
+
+    cad::SnapEngine& snap_engine() noexcept { return snap_engine_; }
+    const cad::SnapEngine& snap_engine() const noexcept { return snap_engine_; }
+
+    cad::DimensionSystem& dimensions() noexcept { return dimensions_; }
+    const cad::DimensionSystem& dimensions() const noexcept { return dimensions_; }
+
+    cad::DxfTemplate& dxf_template() noexcept { return dxf_template_; }
+    const cad::DxfTemplate& dxf_template() const noexcept { return dxf_template_; }
+
+    cad::SceneTessellator& scene_tessellator() noexcept { return scene_tessellator_; }
+    const cad::SceneTessellator& scene_tessellator() const noexcept { return scene_tessellator_; }
+
+    cad::CadCategoryFilter build_category_filter() const noexcept;
+    void sync_cad_configs_from_docking() noexcept;
+
     // Compatibilidad e inspección rápida de especificaciones de Ribbon
     const std::vector<RibbonTabSpec>& estructura_ribbon_tabs() const noexcept { return estructura_tabs_; }
     const std::vector<std::string>& cimentacion_ribbon_groups() const noexcept { return cimentacion_groups_; }
@@ -103,6 +126,13 @@ private:
     DialogoNuevaObra dlg_nueva_obra_{};
     AsistenteNuevaObra wizard_nueva_obra_{};
     DialogoDatosGenerales dlg_datos_generales_{};
+
+    cad::MdiViewManager mdi_manager_{};
+    cad::CadPicker picker_{};
+    cad::SnapEngine snap_engine_{};
+    cad::DimensionSystem dimensions_{};
+    cad::DxfTemplate dxf_template_{};
+    cad::SceneTessellator scene_tessellator_{};
 
     ActiveModalDialog active_modal_{ActiveModalDialog::None};
     std::string active_receptor_id_;

@@ -31,6 +31,9 @@ AppWindow::AppWindow() {
     }
 
     docking_.recalculate_layout(1920, 1032, obra_.solapa_activa());
+    const auto& mf = docking_.layout().cype_mdi_frame;
+    mdi_manager_.set_mdi_frame_rect({mf.x, mf.y, mf.width, mf.height});
+    sync_cad_configs_from_docking();
     dlg_datos_generales_.load_from_obra(obra_);
     sync_status_bar();
 }
@@ -40,7 +43,60 @@ void AppWindow::switch_solapa(model::SolapaActiva nueva_solapa) noexcept {
     active_receptor_id_.clear();
     const auto& cur = docking_.layout().cype_aplicacion;
     docking_.recalculate_layout(cur.width, cur.height, nueva_solapa);
+    const auto& mf = docking_.layout().cype_mdi_frame;
+    mdi_manager_.set_mdi_frame_rect({mf.x, mf.y, mf.width, mf.height});
     sync_status_bar();
+}
+
+cad::CadCategoryFilter AppWindow::build_category_filter() const noexcept {
+    cad::CadCategoryFilter f{};
+    for (const auto& c : docking_.panel_capas().categorias) {
+        switch (c.categoria) {
+            case CategoriaEstructural::Nudos:
+                f.nudos_visible = c.visible;
+                f.nudos_bloqueada = c.bloqueada;
+                break;
+            case CategoriaEstructural::Barras:
+                f.barras_visible = c.visible;
+                f.barras_bloqueada = c.bloqueada;
+                break;
+            case CategoriaEstructural::Tirantes:
+                f.tirantes_visible = c.visible;
+                f.tirantes_bloqueada = c.bloqueada;
+                break;
+            case CategoriaEstructural::Pilares:
+                f.pilares_visible = c.visible;
+                f.pilares_bloqueada = c.bloqueada;
+                break;
+            case CategoriaEstructural::Vigas:
+                f.vigas_visible = c.visible;
+                f.vigas_bloqueada = c.bloqueada;
+                break;
+            case CategoriaEstructural::Panyos:
+                f.panyos_visible = c.visible;
+                f.panyos_bloqueada = c.bloqueada;
+                break;
+            case CategoriaEstructural::Laminas:
+                f.laminas_visible = c.visible;
+                f.laminas_bloqueada = c.bloqueada;
+                break;
+        }
+    }
+    return f;
+}
+
+void AppWindow::sync_cad_configs_from_docking() noexcept {
+    const auto& cb = docking_.cad_captures(obra_.solapa_activa());
+    auto& sc = snap_engine_.config();
+    sc.enabled = cb.activa;
+    sc.snap_extremo = cb.extremo;
+    sc.snap_punto_medio = cb.punto_medio;
+    sc.snap_perpendicular = cb.perpendicular;
+    sc.snap_interseccion = cb.interseccion;
+    sc.snap_mas_cercano = cb.mas_cercano;
+    sc.snap_rastreo_polar = cb.rastreo_polar;
+    sc.snap_rejilla = cb.rejilla;
+    sc.snap_plantilla_dxf = cb.plantilla_dxf;
 }
 
 std::string_view AppWindow::active_solapa_internal_id() const noexcept {
@@ -163,6 +219,80 @@ bool AppWindow::execute_command(std::string_view command_id) {
             }
         }
         status_bar_text_ = "Generar zapatas y vigas: " + std::to_string(creadas) + " elementos generados.";
+        return true;
+    }
+
+    // Comandos de Gestión de Ventanas MDI (Pestaña Ventana — P-04.1 / dispoMDI)
+    if (command_id == "Ventana_AbrirNueva") {
+        const auto id = mdi_manager_.create_view_3d("Vista 3D (" + std::to_string(mdi_manager_.views().size() + 1) + ")");
+        status_bar_text_ = "Nueva vista MDI abierta: ID " + std::to_string(id);
+        return true;
+    }
+    if (command_id == "Ventana_Cerrar") {
+        const bool closed = mdi_manager_.close_view(mdi_manager_.active_view_id());
+        status_bar_text_ = closed ? "Vista activa cerrada." : "No se puede cerrar la única vista MDI activa.";
+        return true;
+    }
+    if (command_id == "Ventana_Anterior") {
+        mdi_manager_.activate_previous();
+        if (const auto* av = mdi_manager_.active_view()) {
+            status_bar_text_ = "Vista activa: " + av->title;
+        }
+        return true;
+    }
+    if (command_id == "Ventana_Siguiente") {
+        mdi_manager_.activate_next();
+        if (const auto* av = mdi_manager_.active_view()) {
+            status_bar_text_ = "Vista activa: " + av->title;
+        }
+        return true;
+    }
+    if (command_id == "Ventana_Cascada") {
+        mdi_manager_.arrange_cascade();
+        status_bar_text_ = "Disposición MDI: Cascada (" + std::to_string(mdi_manager_.views().size()) + " ventanas)";
+        return true;
+    }
+    if (command_id == "Ventana_MosaicoHorizontal") {
+        mdi_manager_.arrange_tile_horizontal();
+        status_bar_text_ = "Disposición MDI: Mosaico horizontal (" + std::to_string(mdi_manager_.views().size()) + " ventanas)";
+        return true;
+    }
+    if (command_id == "Ventana_MosaicoVertical") {
+        mdi_manager_.arrange_tile_vertical();
+        status_bar_text_ = "Disposición MDI: Mosaico vertical (" + std::to_string(mdi_manager_.views().size()) + " ventanas)";
+        return true;
+    }
+    if (command_id == "Ventana_OrdenarVentanas") {
+        mdi_manager_.arrange_order_grid();
+        status_bar_text_ = "Disposición MDI: Ordenar ventanas (" + std::to_string(mdi_manager_.views().size()) + " ventanas)";
+        return true;
+    }
+
+    // Comandos de Vista 3D y Planos/Niveles/Cotas (P-04.1 / P-04.2)
+    if (command_id == "Obra_Vista3D" || command_id == "Obra_Vista3D_vista" || command_id == "vista_3D") {
+        if (auto* av = mdi_manager_.active_view_mut()) {
+            av->camera.zoom_extents(obra_.bounding_box(), av->rect.width, av->rect.height);
+        }
+        status_bar_text_ = "Vista 3D de la estructura actualizada.";
+        return true;
+    }
+    if (command_id == "Obra_niveles") {
+        const double next_z = static_cast<double>(obra_.estructura().niveles.size() + 1) * 3.0;
+        const auto niv_id = obra_.add_nivel_planta("Planta " + std::to_string(obra_.estructura().niveles.size() + 1), next_z, 3.0);
+        if (const auto& nivs = obra_.estructura().niveles; !nivs.empty()) {
+            mdi_manager_.create_view_planta_nivel(nivs.back());
+        }
+        status_bar_text_ = "Nivel de planta creado (ID " + std::to_string(niv_id) + ") a cota Z = " + std::to_string(next_z) + " m.";
+        return true;
+    }
+    if (command_id == "Planos_Cotas_Mostrar") {
+        dimensions_.show_all();
+        status_bar_text_ = "Acotación: todas las cotas visibles.";
+        return true;
+    }
+    if (command_id == "Planos_Cotas_Ocultar") {
+        dimensions_.hide_all();
+        status_bar_text_ = "Acotación: todas las cotas ocultas.";
         return true;
     }
 
