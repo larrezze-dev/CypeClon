@@ -1,6 +1,9 @@
 #include "model/obra.hpp"
 
 #include <algorithm>
+#include <cmath>
+#include <numbers>
+#include <unordered_map>
 
 namespace cypeclon::model {
 
@@ -10,12 +13,16 @@ Obra::Obra() {
     add_hipotesis_carga("PP", "Peso propio", 0, 0, 0, 0, true);
     add_hipotesis_carga("CM", "Cargas muertas", 1, 0, 0, 0, true);
     add_hipotesis_carga("Q1", "Sobrecarga de uso", 2, 0, 0, 0, true);
+    add_definicion_rotula_plastica(DefinicionRotulaPlastica{
+        0, "FEMA356-Acero-Flexion-M3", TipoRotulaPlastica::FlexionEjeFuerteM3, 0.03, 0.010, 0.025, 0.040, 0.050, 0.20
+    });
     undo_redo_.clear();
 }
 
 std::uint32_t Obra::add_nudo(const core::Vec3d& pos, VinculacionExterior vinc) {
     const std::uint32_t assigned_id = estructura_.next_nudo_id++;
     Nudo3d nudo{assigned_id, pos, "N" + std::to_string(assigned_id), vinc, true};
+    nudo.vinc_ext_datos = DatosVinculacionExteriorNudo::from_tipo(vinc);
 
     undo_redo_.record_action(
         "Nuevo nudo N" + std::to_string(assigned_id),
@@ -111,6 +118,13 @@ std::uint32_t Obra::add_elemento_cimentacion(
 
 const Nudo3d* Obra::find_nudo(std::uint32_t id) const noexcept {
     for (const auto& n : estructura_.nudos) {
+        if (n.id == id) return &n;
+    }
+    return nullptr;
+}
+
+Nudo3d* Obra::find_nudo_mut(std::uint32_t id) noexcept {
+    for (auto& n : estructura_.nudos) {
         if (n.id == id) return &n;
     }
     return nullptr;
@@ -277,6 +291,676 @@ core::BBox3d Obra::bounding_box() const noexcept {
         }
     }
     return box;
+}
+
+// ============================================================================
+// Fase 5 (P-06.1): Operaciones sobre Nudos (`ed3dlib.dll`, `calcesf.dll`)
+// ============================================================================
+
+bool Obra::delete_nudo(std::uint32_t nudo_id, bool eliminar_barras_incidentes) {
+    auto it = std::find_if(estructura_.nudos.begin(), estructura_.nudos.end(),
+                           [nudo_id](const Nudo3d& n) { return n.id == nudo_id; });
+    if (it == estructura_.nudos.end()) {
+        return false;
+    }
+
+    const Nudo3d saved_nudo = *it;
+    std::vector<Barra3d> removed_bars;
+    if (eliminar_barras_incidentes) {
+        for (const auto& b : estructura_.barras) {
+            if (b.nudo_inicial_id == nudo_id || b.nudo_final_id == nudo_id) {
+                removed_bars.push_back(b);
+            }
+        }
+    }
+
+    undo_redo_.record_action(
+        "Borrar nudo N" + std::to_string(nudo_id),
+        [this, nudo_id, eliminar_barras_incidentes]() {
+            if (eliminar_barras_incidentes) {
+                auto& bvec = estructura_.barras;
+                bvec.erase(std::remove_if(bvec.begin(), bvec.end(),
+                                          [nudo_id](const Barra3d& b) {
+                                              return b.nudo_inicial_id == nudo_id || b.nudo_final_id == nudo_id;
+                                          }),
+                           bvec.end());
+            }
+            auto& nvec = estructura_.nudos;
+            nvec.erase(std::remove_if(nvec.begin(), nvec.end(),
+                                      [nudo_id](const Nudo3d& n) { return n.id == nudo_id; }),
+                       nvec.end());
+        },
+        [this, saved_nudo, removed_bars]() {
+            estructura_.nudos.push_back(saved_nudo);
+            for (const auto& b : removed_bars) {
+                estructura_.barras.push_back(b);
+            }
+        },
+        true
+    );
+    return true;
+}
+
+bool Obra::vincular_empatar_nudos(std::uint32_t nudo_destino_id, std::uint32_t nudo_absorbido_id) {
+    if (nudo_destino_id == nudo_absorbido_id) return false;
+    const Nudo3d* dst = find_nudo(nudo_destino_id);
+    const Nudo3d* abs = find_nudo(nudo_absorbido_id);
+    if (!dst || !abs) return false;
+
+    const auto saved_nudos = estructura_.nudos;
+    const auto saved_barras = estructura_.barras;
+
+    undo_redo_.record_action(
+        "Vincular nudos N" + std::to_string(nudo_destino_id) + " <- N" + std::to_string(nudo_absorbido_id),
+        [this, nudo_destino_id, nudo_absorbido_id]() {
+            for (auto& b : estructura_.barras) {
+                if (b.nudo_inicial_id == nudo_absorbido_id) b.nudo_inicial_id = nudo_destino_id;
+                if (b.nudo_final_id == nudo_absorbido_id) b.nudo_final_id = nudo_destino_id;
+            }
+            // Eliminar posibles barras degeneradas (nudo_ini == nudo_fin)
+            estructura_.barras.erase(
+                std::remove_if(estructura_.barras.begin(), estructura_.barras.end(),
+                               [](const Barra3d& b) { return b.nudo_inicial_id == b.nudo_final_id; }),
+                estructura_.barras.end());
+
+            estructura_.nudos.erase(
+                std::remove_if(estructura_.nudos.begin(), estructura_.nudos.end(),
+                               [nudo_absorbido_id](const Nudo3d& n) { return n.id == nudo_absorbido_id; }),
+                estructura_.nudos.end());
+        },
+        [this, saved_nudos, saved_barras]() {
+            estructura_.nudos = saved_nudos;
+            estructura_.barras = saved_barras;
+        },
+        true
+    );
+    return true;
+}
+
+std::uint32_t Obra::desempatar_nudo(std::uint32_t nudo_id, std::uint32_t barra_id) {
+    const Nudo3d* orig = find_nudo(nudo_id);
+    Barra3d* b = find_barra_mut(barra_id);
+    if (!orig || !b) return 0;
+    if (b->nudo_inicial_id != nudo_id && b->nudo_final_id != nudo_id) return 0;
+
+    const core::Vec3d pos_copy = orig->pos;
+    const VinculacionExterior vinc_copy = orig->vinc_ext;
+    const std::uint32_t new_nudo_id = add_nudo(pos_copy, vinc_copy);
+
+    b = find_barra_mut(barra_id);
+    if (b->nudo_inicial_id == nudo_id) {
+        b->nudo_inicial_id = new_nudo_id;
+    } else {
+        b->nudo_final_id = new_nudo_id;
+    }
+    return new_nudo_id;
+}
+
+bool Obra::set_vinculacion_exterior_nudo(
+    std::uint32_t nudo_id,
+    VinculacionExterior tipo,
+    const DatosVinculacionExteriorNudo& datos
+) {
+    Nudo3d* n = find_nudo_mut(nudo_id);
+    if (!n) return false;
+    n->vinc_ext = tipo;
+    n->vinc_ext_datos = datos;
+    return true;
+}
+
+bool Obra::set_vinculacion_interior_nudo(
+    std::uint32_t nudo_id,
+    TipoVinculacionInterior tipo,
+    double grado_empotramiento
+) {
+    Nudo3d* n = find_nudo_mut(nudo_id);
+    if (!n) return false;
+    n->tipo_vinc_int = tipo;
+    if (tipo == TipoVinculacionInterior::Empotrado) {
+        n->empotrado_interior = true;
+        n->grado_empotramiento_interior = 1.0;
+    } else if (tipo == TipoVinculacionInterior::Articulado) {
+        n->empotrado_interior = false;
+        n->grado_empotramiento_interior = 0.0;
+    } else {
+        n->empotrado_interior = (grado_empotramiento >= 0.5);
+        n->grado_empotramiento_interior = std::clamp(grado_empotramiento, 0.0, 1.0);
+    }
+    return true;
+}
+
+std::uint32_t Obra::add_ligadura_nudos(
+    std::string_view nombre,
+    const std::vector<std::uint32_t>& nudo_ids,
+    bool ligar_dx,
+    bool ligar_dy,
+    bool ligar_dz
+) {
+    const std::uint32_t id = estructura_.next_ligadura_id++;
+    LigaduraDesplazamientoNudos lig{
+        id,
+        nombre.empty() ? ("Ligadura " + std::to_string(id)) : std::string(nombre),
+        nudo_ids,
+        ligar_dx,
+        ligar_dy,
+        ligar_dz
+    };
+    estructura_.ligaduras.push_back(std::move(lig));
+    return id;
+}
+
+std::size_t Obra::generar_diafragmas_por_niveles(double tolerancia_z_m) {
+    estructura_.diafragmas.clear();
+    for (auto& n : estructura_.nudos) {
+        n.diafragma_id = 0;
+    }
+
+    std::size_t count = 0;
+    for (const auto& niv : estructura_.niveles) {
+        if (std::abs(niv.cota_z_m) < 1e-4) {
+            continue; // La cota de cimentación Z=0 no lleva diafragma de piso por defecto
+        }
+        std::vector<std::uint32_t> nudos_en_planta;
+        for (const auto& n : estructura_.nudos) {
+            if (std::abs(n.pos.z - niv.cota_z_m) <= tolerancia_z_m) {
+                nudos_en_planta.push_back(n.id);
+            }
+        }
+        if (nudos_en_planta.size() >= 2) {
+            const std::uint32_t did = estructura_.next_diafragma_id++;
+            for (const auto nid : nudos_en_planta) {
+                if (auto* nm = find_nudo_mut(nid)) {
+                    nm->diafragma_id = did;
+                }
+            }
+            estructura_.diafragmas.push_back(DiafragmaRigidoPlanta{
+                did,
+                "Diafragma " + niv.nombre,
+                niv.cota_z_m,
+                std::move(nudos_en_planta),
+                true
+            });
+            ++count;
+        }
+    }
+    return count;
+}
+
+void Obra::reiniciar_numeracion_nudos_y_barras() {
+    std::uint32_t nid = 1;
+    for (auto& n : estructura_.nudos) {
+        n.referencia = "N" + std::to_string(nid++);
+    }
+}
+
+// ============================================================================
+// Fase 5 (P-06.2): Operaciones sobre Barras, Piezas y Agrupaciones
+// ============================================================================
+
+bool Obra::delete_barra(std::uint32_t barra_id) {
+    auto it = std::find_if(estructura_.barras.begin(), estructura_.barras.end(),
+                           [barra_id](const Barra3d& b) { return b.id == barra_id; });
+    if (it == estructura_.barras.end()) return false;
+
+    const Barra3d saved_barra = *it;
+    undo_redo_.record_action(
+        "Borrar barra B" + std::to_string(barra_id),
+        [this, barra_id]() {
+            auto& bvec = estructura_.barras;
+            bvec.erase(std::remove_if(bvec.begin(), bvec.end(),
+                                      [barra_id](const Barra3d& b) { return b.id == barra_id; }),
+                       bvec.end());
+        },
+        [this, saved_barra]() {
+            estructura_.barras.push_back(saved_barra);
+        },
+        true
+    );
+    return true;
+}
+
+bool Obra::move_extremo_barra(std::uint32_t barra_id, bool extremo_inicial, std::uint32_t nuevo_nudo_id) {
+    if (!find_nudo(nuevo_nudo_id)) return false;
+    Barra3d* b = find_barra_mut(barra_id);
+    if (!b) return false;
+
+    const std::uint32_t otro_nudo = extremo_inicial ? b->nudo_final_id : b->nudo_inicial_id;
+    if (otro_nudo == nuevo_nudo_id) return false;
+
+    if (extremo_inicial) {
+        b->nudo_inicial_id = nuevo_nudo_id;
+    } else {
+        b->nudo_final_id = nuevo_nudo_id;
+    }
+    return true;
+}
+
+bool Obra::invertir_sentido_eje_x_barra(std::uint32_t barra_id) {
+    Barra3d* b = find_barra_mut(barra_id);
+    if (!b) return false;
+    std::swap(b->nudo_inicial_id, b->nudo_final_id);
+    std::swap(b->disposicion.desp_y_ini_m, b->disposicion.desp_y_fin_m);
+    std::swap(b->disposicion.desp_z_ini_m, b->disposicion.desp_z_fin_m);
+    std::swap(b->empotramiento.emp_xy_ini, b->empotramiento.emp_xy_fin);
+    std::swap(b->empotramiento.emp_xz_ini, b->empotramiento.emp_xz_fin);
+    return true;
+}
+
+double Obra::longitud_barra_m(std::uint32_t barra_id) const noexcept {
+    const Barra3d* b = find_barra(barra_id);
+    if (!b) return 0.0;
+    const Nudo3d* n1 = find_nudo(b->nudo_inicial_id);
+    const Nudo3d* n2 = find_nudo(b->nudo_final_id);
+    if (!n1 || !n2) return 0.0;
+    return n1->pos.distance_to(n2->pos);
+}
+
+namespace {
+bool segment_segment_intersection_3d(
+    const core::Vec3d& p1, const core::Vec3d& p2,
+    const core::Vec3d& p3, const core::Vec3d& p4,
+    double tol_m,
+    core::Vec3d& out_point
+) noexcept {
+    const core::Vec3d d1 = p2 - p1;
+    const core::Vec3d d2 = p4 - p3;
+    const core::Vec3d r = p1 - p3;
+    const double a = d1.dot(d1);
+    const double e = d2.dot(d2);
+    if (a < 1e-9 || e < 1e-9) return false;
+
+    const double f = d2.dot(r);
+    const double c = d1.dot(r);
+    const double b = d1.dot(d2);
+    const double denom = a * e - b * b;
+
+    if (std::abs(denom) < 1e-9) return false; // Segmentos paralelos o colineales
+
+    const double s = (b * f - c * e) / denom;
+    const double t = (a * f - b * c) / denom;
+
+    // Intersección estrictamente interior en al menos uno de los dos segmentos
+    if (s < 0.02 || s > 0.98 || t < 0.02 || t > 0.98) {
+        return false;
+    }
+
+    const core::Vec3d c1 = p1 + d1 * s;
+    const core::Vec3d c2 = p3 + d2 * t;
+    if (c1.distance_to(c2) > tol_m) {
+        return false;
+    }
+    out_point = (c1 + c2) * 0.5;
+    return true;
+}
+} // namespace
+
+std::size_t Obra::generar_nudos_y_dividir_barras_en_cruces(double tolerancia_m) {
+    std::size_t intersections_created = 0;
+    bool found_any = true;
+    int max_passes = 32;
+
+    while (found_any && max_passes-- > 0) {
+        found_any = false;
+        const std::size_t n_bars = estructura_.barras.size();
+        for (std::size_t i = 0; i < n_bars && !found_any; ++i) {
+            for (std::size_t j = i + 1; j < n_bars && !found_any; ++j) {
+                const Barra3d b1 = estructura_.barras[i];
+                const Barra3d b2 = estructura_.barras[j];
+                if (b1.nudo_inicial_id == b2.nudo_inicial_id ||
+                    b1.nudo_inicial_id == b2.nudo_final_id ||
+                    b1.nudo_final_id == b2.nudo_inicial_id ||
+                    b1.nudo_final_id == b2.nudo_final_id) {
+                    continue;
+                }
+
+                const Nudo3d* n1a = find_nudo(b1.nudo_inicial_id);
+                const Nudo3d* n1b = find_nudo(b1.nudo_final_id);
+                const Nudo3d* n2a = find_nudo(b2.nudo_inicial_id);
+                const Nudo3d* n2b = find_nudo(b2.nudo_final_id);
+                if (!n1a || !n1b || !n2a || !n2b) continue;
+
+                core::Vec3d pt_inter;
+                if (segment_segment_intersection_3d(n1a->pos, n1b->pos, n2a->pos, n2b->pos, tolerancia_m, pt_inter)) {
+                    const std::uint32_t nid_inter = add_nudo(pt_inter, VinculacionExterior::Libre);
+
+                    // Subdividir b1 (n1a -> nid_inter y nid_inter -> n1b) y b2 (n2a -> nid_inter y nid_inter -> n2b)
+                    estructura_.barras[i].nudo_final_id = nid_inter;
+                    estructura_.barras[j].nudo_final_id = nid_inter;
+
+                    const std::uint32_t new_b1 = add_barra(nid_inter, b1.nudo_final_id, b1.perfil, b1.material);
+                    if (auto* nb1 = find_barra_mut(new_b1)) {
+                        nb1->angulo_giro_rad = b1.angulo_giro_rad;
+                        nb1->es_tirante = b1.es_tirante;
+                        nb1->capa_id = b1.capa_id;
+                        nb1->tipo_estructural = b1.tipo_estructural;
+                    }
+
+                    const std::uint32_t new_b2 = add_barra(nid_inter, b2.nudo_final_id, b2.perfil, b2.material);
+                    if (auto* nb2 = find_barra_mut(new_b2)) {
+                        nb2->angulo_giro_rad = b2.angulo_giro_rad;
+                        nb2->es_tirante = b2.es_tirante;
+                        nb2->capa_id = b2.capa_id;
+                        nb2->tipo_estructural = b2.tipo_estructural;
+                    }
+
+                    ++intersections_created;
+                    found_any = true;
+                }
+            }
+        }
+    }
+    return intersections_created;
+}
+
+std::uint32_t Obra::crear_pieza(const std::vector<std::uint32_t>& barra_ids, std::string_view nombre) {
+    if (barra_ids.empty()) return 0;
+
+    double len_total = 0.0;
+    std::uint32_t n_ini = 0;
+    std::uint32_t n_fin = 0;
+
+    for (std::size_t idx = 0; idx < barra_ids.size(); ++idx) {
+        const Barra3d* b = find_barra(barra_ids[idx]);
+        if (!b) return 0;
+        if (idx == 0) n_ini = b->nudo_inicial_id;
+        if (idx + 1 == barra_ids.size()) n_fin = b->nudo_final_id;
+        len_total += longitud_barra_m(b->id);
+    }
+
+    const std::uint32_t pid = estructura_.next_pieza_id++;
+    for (const auto bid : barra_ids) {
+        if (auto* bm = find_barra_mut(bid)) {
+            bm->pieza_id = pid;
+        }
+    }
+
+    estructura_.piezas.push_back(PiezaEstructural{
+        pid,
+        nombre.empty() ? ("Pieza " + std::to_string(pid)) : std::string(nombre),
+        barra_ids,
+        n_ini,
+        n_fin,
+        len_total
+    });
+    return pid;
+}
+
+bool Obra::dividir_pieza(std::uint32_t pieza_id) {
+    auto it = std::find_if(estructura_.piezas.begin(), estructura_.piezas.end(),
+                           [pieza_id](const PiezaEstructural& p) { return p.id == pieza_id; });
+    if (it == estructura_.piezas.end()) return false;
+
+    for (const auto bid : it->barra_ids) {
+        if (auto* bm = find_barra_mut(bid)) {
+            bm->pieza_id = 0;
+        }
+    }
+    estructura_.piezas.erase(it);
+    return true;
+}
+
+std::uint32_t Obra::agrupar_barras(const std::vector<std::uint32_t>& barra_ids, std::string_view nombre) {
+    if (barra_ids.empty()) return 0;
+    const Barra3d* b0 = find_barra(barra_ids.front());
+    if (!b0) return 0;
+
+    const std::uint32_t aid = estructura_.next_agrupacion_id++;
+    const std::string perf = b0->perfil;
+    const std::string mat = b0->material;
+
+    for (const auto bid : barra_ids) {
+        if (auto* bm = find_barra_mut(bid)) {
+            bm->agrupacion_id = aid;
+            bm->perfil = perf;
+            bm->material = mat;
+        }
+    }
+
+    estructura_.agrupaciones.push_back(AgrupacionBarras{
+        aid,
+        nombre.empty() ? ("Agrupación " + std::to_string(aid)) : std::string(nombre),
+        barra_ids,
+        perf,
+        mat
+    });
+    return aid;
+}
+
+bool Obra::desagrupar_barras(std::uint32_t agrupacion_id) {
+    auto it = std::find_if(estructura_.agrupaciones.begin(), estructura_.agrupaciones.end(),
+                           [agrupacion_id](const AgrupacionBarras& a) { return a.id == agrupacion_id; });
+    if (it == estructura_.agrupaciones.end()) return false;
+
+    for (const auto bid : it->barra_ids) {
+        if (auto* bm = find_barra_mut(bid)) {
+            bm->agrupacion_id = 0;
+        }
+    }
+    estructura_.agrupaciones.erase(it);
+    return true;
+}
+
+// ============================================================================
+// Fase 5 (P-06.3): Grupos de Flecha, Tirantes en X, Pandeo y Rótulas Plásticas
+// ============================================================================
+
+std::uint32_t Obra::crear_grupo_flecha(
+    const std::vector<std::uint32_t>& barra_ids,
+    TipoMedicionFlecha tipo
+) {
+    if (barra_ids.empty()) return 0;
+    double len_ref = 0.0;
+    std::uint32_t na = 0;
+    std::uint32_t nb = 0;
+
+    for (std::size_t i = 0; i < barra_ids.size(); ++i) {
+        const Barra3d* b = find_barra(barra_ids[i]);
+        if (!b) return 0;
+        if (i == 0) na = b->nudo_inicial_id;
+        if (i + 1 == barra_ids.size()) nb = b->nudo_final_id;
+        len_ref += longitud_barra_m(b->id);
+    }
+
+    const std::uint32_t gfid = estructura_.next_grupo_flecha_id++;
+    for (const auto bid : barra_ids) {
+        if (auto* bm = find_barra_mut(bid)) {
+            bm->flecha.grupo_flecha_id = gfid;
+            bm->flecha.tipo_medicion = tipo;
+        }
+    }
+
+    estructura_.grupos_flecha.push_back(GrupoFlecha{
+        gfid,
+        "Grupo de flecha " + std::to_string(gfid),
+        barra_ids,
+        na,
+        nb,
+        len_ref,
+        tipo
+    });
+    return gfid;
+}
+
+CuadroArriostramientoTirantes Obra::emparejar_tirantes_recuadro(
+    std::uint32_t barra_diag1_id,
+    std::uint32_t barra_diag2_id,
+    double tol_coplanar_m
+) {
+    CuadroArriostramientoTirantes cuadro{};
+    cuadro.id = estructura_.next_cuadro_tirantes_id++;
+    cuadro.barra_diagonal_1_id = barra_diag1_id;
+    cuadro.barra_diagonal_2_id = barra_diag2_id;
+
+    Barra3d* b1 = find_barra_mut(barra_diag1_id);
+    Barra3d* b2 = find_barra_mut(barra_diag2_id);
+    if (!b1 || !b2 || barra_diag1_id == barra_diag2_id) {
+        cuadro.geometricamente_valido = false;
+        cuadro.mensaje_validacion = "Barras diagonales no encontradas o idénticas.";
+        return cuadro;
+    }
+
+    const Nudo3d* n1a = find_nudo(b1->nudo_inicial_id);
+    const Nudo3d* n1b = find_nudo(b1->nudo_final_id);
+    const Nudo3d* n2a = find_nudo(b2->nudo_inicial_id);
+    const Nudo3d* n2b = find_nudo(b2->nudo_final_id);
+    if (!n1a || !n1b || !n2a || !n2b) {
+        cuadro.geometricamente_valido = false;
+        cuadro.mensaje_validacion = "Nudos extremos de las diagonales no válidos.";
+        return cuadro;
+    }
+
+    cuadro.nudos_recuadro = {n1a->id, n1b->id, n2a->id, n2b->id};
+
+    // Validación de coplanaridad de los 4 vértices del recuadro (`esp3dcmb_son_tirantes_geometricamente_compatibles_para_formar_cuadro_arriostramiento`)
+    const core::Vec3d v1 = n1b->pos - n1a->pos;
+    const core::Vec3d v2 = n2b->pos - n2a->pos;
+    const core::Vec3d normal = v1.cross(v2);
+    const double norm_len = normal.norm();
+    if (norm_len < 1e-6) {
+        cuadro.geometricamente_valido = false;
+        cuadro.mensaje_validacion = "Las diagonales son paralelas; no forman una cruz de San Andrés.";
+        return cuadro;
+    }
+
+    const core::Vec3d unit_normal = normal * (1.0 / norm_len);
+    const double dist_coplanar = std::abs((n2a->pos - n1a->pos).dot(unit_normal));
+    if (dist_coplanar > tol_coplanar_m) {
+        cuadro.geometricamente_valido = false;
+        cuadro.mensaje_validacion = "Los 4 nudos de los tirantes no son coplanares dentro de la tolerancia.";
+        return cuadro;
+    }
+
+    const double cos_ang = std::clamp(std::abs(v1.normalized().dot(v2.normalized())), 0.0, 1.0);
+    cuadro.angulo_diagonal_deg = 0.5 * std::acos(cos_ang) * (180.0 / std::numbers::pi);
+    cuadro.geometricamente_valido = true;
+    cuadro.mensaje_validacion = "Recuadro arriostrado en X geométricamente compatible.";
+
+    b1->es_tirante = true;
+    b1->tipo_estructural = TipoBarraEstructural::Tirante;
+    b1->empotramiento = EmpotramientoExtremosBarra::biarticulado();
+
+    b2->es_tirante = true;
+    b2->tipo_estructural = TipoBarraEstructural::Tirante;
+    b2->empotramiento = EmpotramientoExtremosBarra::biarticulado();
+
+    estructura_.cuadros_tirantes.push_back(cuadro);
+    return cuadro;
+}
+
+std::size_t Obra::calcular_pandeo_automatico_estructura(
+    bool estructura_traslacional_xy,
+    bool estructura_traslacional_xz
+) {
+    std::size_t updated = 0;
+
+    for (auto& b : estructura_.barras) {
+        if (b.es_tirante) {
+            b.pandeo.modo_xy = ModoCalculoPandeo::SinPandeo;
+            b.pandeo.modo_xz = ModoCalculoPandeo::SinPandeo;
+            b.pandeo.beta_xy = 0.0;
+            b.pandeo.beta_xz = 0.0;
+            continue;
+        }
+
+        const Nudo3d* na = find_nudo(b.nudo_inicial_id);
+        const Nudo3d* nb = find_nudo(b.nudo_final_id);
+        if (!na || !nb) continue;
+
+        auto node_flexibility = [&](const Nudo3d* n, double emp_barra) noexcept -> double {
+            if (n->vinc_ext == VinculacionExterior::Empotrado) return 0.05;
+            if (n->vinc_ext == VinculacionExterior::ArticuladoFijo) return 0.95;
+            if (!n->empotrado_interior || emp_barra < 0.05) return 0.95;
+            return std::clamp(1.0 - 0.70 * emp_barra * n->grado_empotramiento_interior, 0.10, 0.95);
+        };
+
+        const double ga_xy = node_flexibility(na, b.empotramiento.emp_xy_ini);
+        const double gb_xy = node_flexibility(nb, b.empotramiento.emp_xy_fin);
+        const double ga_xz = node_flexibility(na, b.empotramiento.emp_xz_ini);
+        const double gb_xz = node_flexibility(nb, b.empotramiento.emp_xz_fin);
+
+        b.pandeo.modo_xy = estructura_traslacional_xy
+            ? ModoCalculoPandeo::AutoTraslacional
+            : ModoCalculoPandeo::AutoIntraslacional;
+        b.pandeo.beta_xy = estructura_traslacional_xy
+            ? DatosPandeoBarra::vpandeo_beta_traslacional(ga_xy, gb_xy)
+            : DatosPandeoBarra::vpandeo_beta_intraslacional(ga_xy, gb_xy);
+
+        b.pandeo.modo_xz = estructura_traslacional_xz
+            ? ModoCalculoPandeo::AutoTraslacional
+            : ModoCalculoPandeo::AutoIntraslacional;
+        b.pandeo.beta_xz = estructura_traslacional_xz
+            ? DatosPandeoBarra::vpandeo_beta_traslacional(ga_xz, gb_xz)
+            : DatosPandeoBarra::vpandeo_beta_intraslacional(ga_xz, gb_xz);
+
+        ++updated;
+    }
+    return updated;
+}
+
+std::uint32_t Obra::add_definicion_rotula_plastica(const DefinicionRotulaPlastica& def) {
+    DefinicionRotulaPlastica copy = def;
+    copy.id = estructura_.next_rotula_id++;
+    estructura_.catalogo_rotulas_plasticas.push_back(copy);
+    return copy.id;
+}
+
+// ============================================================================
+// Fase 5 (P-06.4): Pilares y Vigas de Hormigón Armado / Mixtos
+// ============================================================================
+
+std::uint32_t Obra::add_pilar_estructural(const PilarEstructural& pilar, bool generar_barras_3d) {
+    PilarEstructural copy = pilar;
+    copy.id = estructura_.next_pilar_id++;
+    if (copy.referencia.empty()) {
+        copy.referencia = "P" + std::to_string(copy.id);
+    }
+
+    if (generar_barras_3d && !copy.tramos.empty()) {
+        std::uint32_t prev_nudo_id = 0;
+        for (std::size_t idx = 0; idx < copy.tramos.size(); ++idx) {
+            auto& tramo = copy.tramos[idx];
+            if (idx == 0) {
+                const VinculacionExterior v_arranque = copy.con_vinculacion_exterior
+                    ? VinculacionExterior::Empotrado
+                    : VinculacionExterior::Libre;
+                prev_nudo_id = add_nudo({copy.pos_planta_xy.x, copy.pos_planta_xy.y, tramo.cota_inf_m}, v_arranque);
+            }
+            const std::uint32_t top_nudo_id = add_nudo(
+                {copy.pos_planta_xy.x, copy.pos_planta_xy.y, tramo.cota_sup_m},
+                VinculacionExterior::Libre
+            );
+
+            const std::string desc_perfil = (tramo.tipo_seccion == TipoSeccionPilar::HormigonRectangular)
+                ? ("HA " + std::to_string(static_cast<int>(tramo.ancho_x_m * 100.0)) + "x" +
+                           std::to_string(static_cast<int>(tramo.ancho_y_m * 100.0)))
+                : tramo.perfil_metalico;
+
+            tramo.barra_3d_id = add_barra(prev_nudo_id, top_nudo_id, desc_perfil, tramo.hormigon);
+            if (auto* bm = find_barra_mut(tramo.barra_3d_id)) {
+                bm->tipo_estructural = TipoBarraEstructural::ColumnaPilar;
+                bm->pandeo.beta_xy = tramo.beta_pandeo_x;
+                bm->pandeo.beta_xz = tramo.beta_pandeo_y;
+                bm->empotramiento.emp_xy_ini = tramo.coef_empotramiento_pie;
+                bm->empotramiento.emp_xz_ini = tramo.coef_empotramiento_pie;
+                bm->empotramiento.emp_xy_fin = tramo.coef_empotramiento_cabeza;
+                bm->empotramiento.emp_xz_fin = tramo.coef_empotramiento_cabeza;
+            }
+            prev_nudo_id = top_nudo_id;
+        }
+    }
+
+    estructura_.pilares.push_back(std::move(copy));
+    return estructura_.pilares.back().id;
+}
+
+std::uint32_t Obra::add_portico_vigas(const PorticoVigasEstructural& portico) {
+    PorticoVigasEstructural copy = portico;
+    copy.id = estructura_.next_portico_id++;
+    if (copy.referencia.empty()) {
+        copy.referencia = "Pórtico " + std::to_string(copy.id);
+    }
+    estructura_.porticos_vigas.push_back(std::move(copy));
+    return estructura_.porticos_vigas.back().id;
 }
 
 void Obra::write_binary(io::BinaryWriter& writer) const {

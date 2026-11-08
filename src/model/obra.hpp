@@ -3,6 +3,7 @@
 #include "core/math.hpp"
 #include "io/cypesave.hpp"
 #include "io/undoredo.hpp"
+#include "model/structure_elements.hpp"
 #include "units/units.hpp"
 
 #include <cstdint>
@@ -16,13 +17,6 @@ namespace cypeclon::model {
 enum class SolapaActiva : std::uint8_t {
     Estructura = 0,  ///< "METAL3D_ESTRUCTURA" (ed3datos_t / ed3datvi_t)
     Cimentacion = 1  ///< "ID_CIMENTACION" (plcdatos_t / ebadatvi_datos_vista_nulo_t)
-};
-
-enum class VinculacionExterior : std::uint8_t {
-    Libre = 0,
-    ArticuladoFijo,
-    Empotrado,
-    ApoyoElastico
 };
 
 enum class TipoBarraEstructural : std::uint8_t {
@@ -39,6 +33,13 @@ struct Nudo3d {
     VinculacionExterior vinc_ext{VinculacionExterior::Libre};
     bool empotrado_interior{true};
     std::uint32_t capa_id{1};
+
+    // Fase 5 (P-06.1): Vinculación exterior detallada, interior parcial y dimensión finita
+    DatosVinculacionExteriorNudo vinc_ext_datos{};
+    TipoVinculacionInterior tipo_vinc_int{TipoVinculacionInterior::Empotrado};
+    double grado_empotramiento_interior{1.0};
+    double radio_dimension_finita_m{0.0};
+    std::uint32_t diafragma_id{0};
 };
 
 struct Barra3d {
@@ -53,6 +54,17 @@ struct Barra3d {
     TipoBarraEstructural tipo_estructural{TipoBarraEstructural::Generica};
     double desp_y_m{0.0};  ///< Desplazamiento/enrase local Y (m)
     double desp_z_m{0.0};  ///< Desplazamiento/enrase local Z (m)
+
+    // Fase 5 (P-06.2 / P-06.3): Propiedades mecánicas, pandeo, flecha, empotramiento y rótulas
+    bool solo_compresion{false};
+    DisposicionSeccionBarra disposicion{};
+    DatosPandeoBarra pandeo{};
+    DatosPandeoLateralBarra pandeo_lateral{};
+    DatosFlechaBarra flecha{};
+    EmpotramientoExtremosBarra empotramiento{};
+    AsignacionRotulaPlasticaBarra rotulas_plasticas{};
+    std::uint32_t pieza_id{0};
+    std::uint32_t agrupacion_id{0};
 };
 
 struct Lamina3d {
@@ -246,6 +258,18 @@ struct EstructuraDatos {
     std::vector<CargaLinealBarra> cargas_lineales;
     std::vector<CargaPuntualNudo> cargas_nudos;
 
+    // Fase 5 (P-06.1 a P-06.4): Ligaduras, diafragmas, piezas, agrupaciones, flecha, tirantes, rótulas, pilares y vigas
+    std::vector<LigaduraDesplazamientoNudos> ligaduras;
+    std::vector<DiafragmaRigidoPlanta> diafragmas;
+    std::vector<PiezaEstructural> piezas;
+    std::vector<AgrupacionBarras> agrupaciones;
+    std::vector<GrupoFlecha> grupos_flecha;
+    std::vector<CuadroArriostramientoTirantes> cuadros_tirantes;
+    std::vector<DefinicionRotulaPlastica> catalogo_rotulas_plasticas;
+    std::vector<PilarEstructural> pilares;
+    std::vector<PorticoVigasEstructural> porticos_vigas;
+    ProfileLibraryManager biblioteca_perfiles{};
+
     std::uint32_t next_nudo_id{1};
     std::uint32_t next_barra_id{1};
     std::uint32_t next_lamina_id{1};
@@ -256,6 +280,15 @@ struct EstructuraDatos {
     std::uint32_t next_carga_sup_id{1};
     std::uint32_t next_carga_lin_id{1};
     std::uint32_t next_carga_nudo_id{1};
+    std::uint32_t next_ligadura_id{1};
+    std::uint32_t next_diafragma_id{1};
+    std::uint32_t next_pieza_id{1};
+    std::uint32_t next_agrupacion_id{1};
+    std::uint32_t next_grupo_flecha_id{1};
+    std::uint32_t next_cuadro_tirantes_id{1};
+    std::uint32_t next_rotula_id{1};
+    std::uint32_t next_pilar_id{1};
+    std::uint32_t next_portico_id{1};
 };
 
 enum class TipoElementoCimentacion : std::uint8_t {
@@ -355,11 +388,61 @@ public:
     std::uint32_t add_elemento_cimentacion(TipoElementoCimentacion tipo, std::uint32_t nudo_arranque_id, double ancho_x = 1.20, double ancho_y = 1.20, double canto = 0.50);
 
     const Nudo3d* find_nudo(std::uint32_t id) const noexcept;
+    Nudo3d* find_nudo_mut(std::uint32_t id) noexcept;
     const Barra3d* find_barra(std::uint32_t id) const noexcept;
     Barra3d* find_barra_mut(std::uint32_t id) noexcept;
     const EtiquetaCapa* find_capa(std::uint32_t id) const noexcept;
     EtiquetaCapa* find_capa_mut(std::uint32_t id) noexcept;
     core::BBox3d bounding_box() const noexcept;
+
+    // Fase 5 (P-06.1): Operaciones avanzadas sobre Nudos
+    bool delete_nudo(std::uint32_t nudo_id, bool eliminar_barras_incidentes = true);
+    bool vincular_empatar_nudos(std::uint32_t nudo_destino_id, std::uint32_t nudo_absorbido_id);
+    std::uint32_t desempatar_nudo(std::uint32_t nudo_id, std::uint32_t barra_id);
+    bool set_vinculacion_exterior_nudo(
+        std::uint32_t nudo_id,
+        VinculacionExterior tipo,
+        const DatosVinculacionExteriorNudo& datos);
+    bool set_vinculacion_interior_nudo(
+        std::uint32_t nudo_id,
+        TipoVinculacionInterior tipo,
+        double grado_empotramiento = 1.0);
+    std::uint32_t add_ligadura_nudos(
+        std::string_view nombre,
+        const std::vector<std::uint32_t>& nudo_ids,
+        bool ligar_dx = true,
+        bool ligar_dy = true,
+        bool ligar_dz = false);
+    std::size_t generar_diafragmas_por_niveles(double tolerancia_z_m = 0.05);
+    void reiniciar_numeracion_nudos_y_barras();
+
+    // Fase 5 (P-06.2): Operaciones topológicas sobre Barras, Piezas y Agrupaciones
+    bool delete_barra(std::uint32_t barra_id);
+    bool move_extremo_barra(std::uint32_t barra_id, bool extremo_inicial, std::uint32_t nuevo_nudo_id);
+    bool invertir_sentido_eje_x_barra(std::uint32_t barra_id);
+    double longitud_barra_m(std::uint32_t barra_id) const noexcept;
+    std::size_t generar_nudos_y_dividir_barras_en_cruces(double tolerancia_m = 1.0e-3);
+    std::uint32_t crear_pieza(const std::vector<std::uint32_t>& barra_ids, std::string_view nombre = "");
+    bool dividir_pieza(std::uint32_t pieza_id);
+    std::uint32_t agrupar_barras(const std::vector<std::uint32_t>& barra_ids, std::string_view nombre = "");
+    bool desagrupar_barras(std::uint32_t agrupacion_id);
+
+    // Fase 5 (P-06.3): Grupos de flecha, Tirantes en X, Pandeo automático y Rótulas Plásticas
+    std::uint32_t crear_grupo_flecha(
+        const std::vector<std::uint32_t>& barra_ids,
+        TipoMedicionFlecha tipo = TipoMedicionFlecha::SecanteEntreExtremos);
+    CuadroArriostramientoTirantes emparejar_tirantes_recuadro(
+        std::uint32_t barra_diag1_id,
+        std::uint32_t barra_diag2_id,
+        double tol_coplanar_m = 0.02);
+    std::size_t calcular_pandeo_automatico_estructura(
+        bool estructura_traslacional_xy = false,
+        bool estructura_traslacional_xz = false);
+    std::uint32_t add_definicion_rotula_plastica(const DefinicionRotulaPlastica& def);
+
+    // Fase 5 (P-06.4): Pilares y Vigas de Hormigón Armado / Mixtos
+    std::uint32_t add_pilar_estructural(const PilarEstructural& pilar, bool generar_barras_3d = true);
+    std::uint32_t add_portico_vigas(const PorticoVigasEstructural& portico);
 
     // Serialización binaria (.ed3 via cypesave) y JSON
     void write_binary(io::BinaryWriter& writer) const;

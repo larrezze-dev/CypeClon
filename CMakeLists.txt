@@ -69,6 +69,7 @@ target_link_libraries(cypeclon_io PUBLIC cypeclon_core cypeclon_units)
 
 add_library(cypeclon_model STATIC
     src/model/obra.cpp
+    src/model/structure_elements.cpp
 )
 target_link_libraries(cypeclon_model PUBLIC cypeclon_core cypeclon_units cypeclon_io)
 
@@ -142,6 +143,7 @@ add_executable(cypeclon_core_tests
     tests/test_gui_phase2.cpp
     tests/test_cad_phase3.cpp
     tests/test_codes_phase4.cpp
+    tests/test_structure_phase5.cpp
 )
 target_link_libraries(cypeclon_core_tests PRIVATE
     cypeclon_gui

@@ -296,6 +296,38 @@ bool AppWindow::execute_command(std::string_view command_id) {
         return true;
     }
 
+    // Comandos de Fase 5 (Nudos, Barras, Diafragmas, Pandeo, Biblioteca de Perfiles y Rótulas Plásticas)
+    if (command_id == "Obra_reiniciar_numeracion") {
+        obra_.reiniciar_numeracion_nudos_y_barras();
+        status_bar_text_ = "Numeración de nudos y barras reiniciada.";
+        return true;
+    }
+    if (command_id == "gen_diafrags") {
+        const auto creados = obra_.generar_diafragmas_por_niveles();
+        status_bar_text_ = "Diafragmas rígidos generados por niveles: " + std::to_string(creados);
+        return true;
+    }
+    if (command_id == "Obra_RepararGeometria") {
+        const auto cruces = obra_.generar_nudos_y_dividir_barras_en_cruces();
+        status_bar_text_ = "Reparación geométrica: " + std::to_string(cruces) + " intersecciones resueltas.";
+        return true;
+    }
+    if (command_id == "Calculo_AsignaCoefsPan") {
+        const auto actualizadas = obra_.calcular_pandeo_automatico_estructura(false, false);
+        status_bar_text_ = "Cálculo aproximado de longitudes de pandeo: " + std::to_string(actualizadas) + " barras actualizadas.";
+        return true;
+    }
+    if (command_id == "Gestion_biblioteca_perfiles") {
+        const auto total_perf = obra_.estructura().biblioteca_perfiles.catalog().size();
+        status_bar_text_ = "Biblioteca de perfiles activa: " + std::to_string(total_perf) + " perfiles disponibles.";
+        return true;
+    }
+    if (command_id == "Calculo_BibRotulasPlasticas") {
+        const auto total_rot = obra_.estructura().catalogo_rotulas_plasticas.size();
+        status_bar_text_ = "Biblioteca de rótulas plásticas (FEMA 356 / ASCE 41): " + std::to_string(total_rot) + " tipos definidos.";
+        return true;
+    }
+
     status_bar_text_ = "Ejecutado comando: " + item->label + " (" + item->id + ")";
     return true;
 }

@@ -5,13 +5,14 @@
 #include <iostream>
 #include <stdexcept>
 
-// Declaraciones de suites de prueba de Fases 1, 2, 3 y 4
+// Declaraciones de suites de prueba de Fases 1, 2, 3, 4 y 5
 void run_math_tests();
 void run_units_tests();
 void run_io_undoredo_tests();
 void run_gui_phase2_tests();
 void run_cad_phase3_tests();
 void run_codes_phase4_tests();
+void run_structure_phase5_tests();
 
 namespace {
 
@@ -93,6 +94,9 @@ int main() {
     run_codes_phase4_tests();
     std::cout << "[PASS] Fase 4 Normas/Materiales/Acciones/Porticos: cypenorma + datmater + sestlim + combs + sismo + veviento + rstfuego + ed3genport" << std::endl;
 
-    std::cout << "=== TODAS LAS PRUEBAS DE FASES 1, 2, 3 Y 4 SUPERADAS CON EXITO ===" << std::endl;
+    run_structure_phase5_tests();
+    std::cout << "[PASS] Fase 5 Nudos/Barras/Perfiles/Pandeo/Flecha/Pilares/Vigas: calcesf + bibperf3 + seccion + elements + compflecha + pushover + pilares + porvigas + discap" << std::endl;
+
+    std::cout << "=== TODAS LAS PRUEBAS DE FASES 1, 2, 3, 4 Y 5 SUPERADAS CON EXITO ===" << std::endl;
     return 0;
 }
