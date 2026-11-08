@@ -5,7 +5,7 @@
 #include <iostream>
 #include <stdexcept>
 
-// Declaraciones de suites de prueba de Fases 1 a 7
+// Declaraciones de suites de prueba de Fases 1 a 8
 void run_math_tests();
 void run_units_tests();
 void run_io_undoredo_tests();
@@ -14,6 +14,7 @@ void run_cad_phase3_tests();
 void run_codes_phase4_tests();
 void run_structure_phase5_tests();
 void run_shells_loads_phase6_7_tests();
+void run_solver_phase8_tests();
 
 namespace {
 
@@ -101,6 +102,9 @@ int main() {
     run_shells_loads_phase6_7_tests();
     std::cout << "[PASS] Fase 6 y Fase 7 Laminas/Panyos/Cargas: calcmef + calcmallad3d + visesf3d + panyos3d + ed3mnucar + ghipocal" << std::endl;
 
-    std::cout << "=== TODAS LAS PRUEBAS DE FASES 1 A 7 SUPERADAS CON EXITO ===" << std::endl;
+    run_solver_phase8_tests();
+    std::cout << "[PASS] Fase 8 Solver Matricial 3D, MEF, Modal, P-Delta, No Lineal, Pandeo Global y Pushover: cypematr + frontlib + calcesf + cyopensees + sismocal + pushover" << std::endl;
+
+    std::cout << "=== TODAS LAS PRUEBAS DE FASES 1 A 8 SUPERADAS CON EXITO ===" << std::endl;
     return 0;
 }

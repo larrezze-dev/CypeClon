@@ -346,6 +346,37 @@ bool AppWindow::execute_command(std::string_view command_id) {
         return true;
     }
 
+    // Comandos de Fase 8 (Cálculo Matricial 3D, MEF, Estabilidad Global y Pushover — P-09.1 / P-09.2)
+    if (command_id == "Calculo_calcular" || command_id == "Calculo_Calcular") {
+        last_solver_summary_ = solver::SolverEngine::analyze_linear_static(obra_);
+        if (obra_.datos_generales().con_sismo_dinamico) {
+            last_solver_summary_.analisis_modal = solver::SolverEngine::analyze_modal_spectral(
+                obra_, obra_.datos_generales().modos_vibracion_sismo);
+        }
+        status_bar_text_ = "Cálculo completado: " + std::to_string(last_solver_summary_.dof_count) +
+                           " GDL, u_max = " + std::to_string(last_solver_summary_.max_displacement_m * 1000.0) + " mm.";
+        return true;
+    }
+    if (command_id == "Calculo_CalcModal" || command_id == "Calculo_sismo_dinamico") {
+        last_solver_summary_.analisis_modal = solver::SolverEngine::analyze_modal_spectral(
+            obra_, obra_.datos_generales().modos_vibracion_sismo);
+        status_bar_text_ = "Análisis modal espectral completado: " +
+                           std::to_string(last_solver_summary_.analisis_modal->modos.size()) + " modos.";
+        return true;
+    }
+    if (command_id == "Calculo_CalcPan") {
+        last_solver_summary_.analisis_pandeo_global = solver::SolverEngine::analyze_global_buckling(obra_, {{1, 1.0}});
+        const double lcr = last_solver_summary_.analisis_pandeo_global->lambda_cr_minimo;
+        status_bar_text_ = "Análisis de estabilidad global completado (lambda_cr = " + std::to_string(lcr) + ").";
+        return true;
+    }
+    if (command_id == "PO_Calcular") {
+        last_solver_summary_.analisis_pushover = solver::SolverEngine::analyze_pushover(obra_);
+        status_bar_text_ = "Análisis sísmico estático no lineal Pushover completado (" +
+                           std::to_string(last_solver_summary_.analisis_pushover->curva_capacidad.size()) + " pasos).";
+        return true;
+    }
+
     status_bar_text_ = "Ejecutado comando: " + item->label + " (" + item->id + ")";
     return true;
 }

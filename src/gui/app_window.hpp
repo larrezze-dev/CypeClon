@@ -6,6 +6,7 @@
 #include "gui/theme_palette.hpp"
 #include "gui/welcome_and_dialogs.hpp"
 #include "model/obra.hpp"
+#include "solver/solver_engine.hpp"
 
 #include <string>
 #include <string_view>
@@ -109,6 +110,7 @@ public:
     bool execute_command(std::string_view command_id);
     const std::string& active_receptor_id() const noexcept { return active_receptor_id_; }
     const std::string& status_bar_text() const noexcept { return status_bar_text_; }
+    const solver::SolverSummary& last_solver_summary() const noexcept { return last_solver_summary_; }
 
     std::string window_title() const;
     int run_headless_self_check() const;
@@ -118,6 +120,7 @@ private:
     void sync_status_bar() noexcept;
 
     model::Obra obra_{};
+    solver::SolverSummary last_solver_summary_{};
     ThemePalette palette_{};
     DockingSystem docking_{};
     RibbonCatalog ribbon_{true};

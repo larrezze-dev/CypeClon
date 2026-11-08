@@ -79,15 +79,15 @@ add_library(cypeclon_cad STATIC
 )
 target_link_libraries(cypeclon_cad PUBLIC cypeclon_core cypeclon_model)
 
-add_library(cypeclon_solver STATIC
-    src/solver/solver_engine.cpp
-)
-target_link_libraries(cypeclon_solver PUBLIC cypeclon_core cypeclon_model)
-
 add_library(cypeclon_codes STATIC
     src/codes/normativa_engine.cpp
 )
 target_link_libraries(cypeclon_codes PUBLIC cypeclon_core cypeclon_units cypeclon_model)
+
+add_library(cypeclon_solver STATIC
+    src/solver/solver_engine.cpp
+)
+target_link_libraries(cypeclon_solver PUBLIC cypeclon_core cypeclon_units cypeclon_model cypeclon_codes)
 
 add_library(cypeclon_connections STATIC
     src/connections/connections_engine.cpp
@@ -146,6 +146,7 @@ add_executable(cypeclon_core_tests
     tests/test_codes_phase4.cpp
     tests/test_structure_phase5.cpp
     tests/test_shells_loads_phase6_7.cpp
+    tests/test_solver_phase8.cpp
 )
 target_link_libraries(cypeclon_core_tests PRIVATE
     cypeclon_gui
