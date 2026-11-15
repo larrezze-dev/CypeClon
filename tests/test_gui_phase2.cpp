@@ -203,5 +203,16 @@ void run_gui_phase2_tests() {
     TEST_ASSERT(app.obra().cimentacion().elementos.empty());
     TEST_ASSERT(app.execute_command("generar_zapatas_y_vigas"));
     TEST_ASSERT(app.obra().cimentacion().elementos.size() >= 2);
+
+    // Verificar carga del proyecto demostrativo 3D completo (load_default_demo_project)
+    app.load_default_demo_project();
+    TEST_ASSERT(app.obra().abierta());
+    TEST_ASSERT(app.obra().estructura().nudos.size() >= 15);
+    TEST_ASSERT(app.obra().estructura().barras.size() >= 20);
+    TEST_ASSERT(!app.last_solver_summary().resultados_hipotesis.empty());
+    TEST_ASSERT(!app.last_design_summary().comprobaciones_barras.empty());
+    TEST_ASSERT(!app.last_baseplates().empty());
+    TEST_ASSERT(!app.last_connections().empty());
+    TEST_ASSERT(!app.last_foundation_model().zapatas.empty());
 }
 

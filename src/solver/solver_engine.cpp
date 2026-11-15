@@ -94,20 +94,18 @@ bool LinearAlgebraEngine::solucion_multiples_hipotesis(
         return true;
     }
 
-    bool all_ok = true;
+    int all_ok = 1;
     const int rhs_count = static_cast<int>(num_rhs);
 #ifdef _OPENMP
-    #pragma omp parallel for schedule(dynamic)
+    #pragma omp parallel for schedule(dynamic) reduction(&&:all_ok)
 #endif
     for (int col = 0; col < rhs_count; ++col) {
         std::vector<double> sol;
         const bool ok = solucion_sistema_ecuaciones(a_row_major, b_columns[static_cast<std::size_t>(col)], n, sol);
-        if (!ok) {
-            all_ok = false;
-        }
+        all_ok = all_ok && (ok ? 1 : 0);
         x_columns_out[static_cast<std::size_t>(col)] = std::move(sol);
     }
-    return all_ok;
+    return all_ok != 0;
 }
 
 std::vector<double> LinearAlgebraEngine::triple_producto_cambio_trasp_x_base_x_cambio(

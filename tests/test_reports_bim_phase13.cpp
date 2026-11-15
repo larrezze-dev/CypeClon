@@ -148,3 +148,4 @@ void run_reports_bim_phase13_tests() {
     TEST_P13_ASSERT(app.execute_command("Ayuda_MemoriaCalculo"));
     TEST_P13_ASSERT(!app.last_report_document().capitulos.empty());
 }
+

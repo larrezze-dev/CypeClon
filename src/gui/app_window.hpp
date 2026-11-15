@@ -130,6 +130,7 @@ public:
     const std::string& last_exported_payload() const noexcept { return last_exported_payload_; }
 
     std::string window_title() const;
+    void load_default_demo_project();
     int run_headless_self_check() const;
     int run_win32_window();
 

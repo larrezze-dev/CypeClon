@@ -132,6 +132,9 @@ add_executable(CypeClon
     src/app/main.cpp
 )
 target_link_libraries(CypeClon PRIVATE cypeclon_gui)
+if(MSVC)
+    target_link_options(CypeClon PRIVATE "/SUBSYSTEM:WINDOWS" "/ENTRY:mainCRTStartup")
+endif()
 
 # ==============================================================================
 # Suite de Pruebas Unitarias (CTest)
