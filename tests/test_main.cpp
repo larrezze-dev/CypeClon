@@ -17,6 +17,7 @@ void run_shells_loads_phase6_7_tests();
 void run_solver_phase8_tests();
 void run_design_phase9_tests();
 void run_results_phase10_tests();
+void run_connections_phase11_tests();
 
 namespace {
 
@@ -113,6 +114,9 @@ int main() {
     run_results_phase10_tests();
     std::cout << "[PASS] Fase 10 Consulta Grafica de Resultados 3D (Deformada, Animacion, Diagramas, Cursores, Isovalores, Isolineas, Reacciones y Aprovechamiento): visesf3d + isolin + modanres3d" << std::endl;
 
-    std::cout << "=== TODAS LAS PRUEBAS DE FASES 1 A 10 SUPERADAS CON EXITO ===" << std::endl;
+    run_connections_phase11_tests();
+    std::cout << "[PASS] Fase 11 Uniones Soldadas y Atornilladas + Placas de Anclaje: placancl + pneleme + uniones + unionbase + unionbase2 + bimjsunion" << std::endl;
+
+    std::cout << "=== TODAS LAS PRUEBAS DE FASES 1 A 11 SUPERADAS CON EXITO ===" << std::endl;
     return 0;
 }

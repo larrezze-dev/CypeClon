@@ -523,6 +523,72 @@ bool AppWindow::execute_command(std::string_view command_id) {
         return true;
     }
 
+    // -------------------------------------------------------------------------
+    // Comandos de Fase 11 (P-12.1): Uniones y Placas de Anclaje (`placancl`, `uniones`, `unionbase`)
+    // -------------------------------------------------------------------------
+    if (command_id == "Placas_Anclaje_generar" || command_id == "Placas_Anclaje_dimensionar" ||
+        command_id == "Placas_Anclaje_comprobar" || command_id == "Placas_Anclaje_editar" ||
+        command_id == "Placas_Anclaje_igualar" || command_id == "Placas_Anclaje_borrar") {
+        if (last_solver_summary_.resultados_hipotesis.empty() && !obra_.estructura().barras.empty()) {
+            last_solver_summary_ = solver::SolverEngine::analyze_linear_static(obra_);
+        }
+        if (command_id == "Placas_Anclaje_borrar") {
+            last_baseplates_.clear();
+            status_bar_text_ = "Placas de anclaje borradas.";
+            return true;
+        }
+        if (last_baseplates_.empty() || command_id == "Placas_Anclaje_generar") {
+            last_baseplates_ = connections::ConnectionsEngine::generar_todas_las_placas_anclaje(obra_);
+        }
+        if (command_id == "Placas_Anclaje_igualar" && last_baseplates_.size() >= 2) {
+            connections::ConnectionsEngine::igualar_placas_anclaje(last_baseplates_.front(), last_baseplates_, {});
+        }
+        std::size_t cumplen = 0;
+        for (auto& pl : last_baseplates_) {
+            const auto r = (command_id == "Placas_Anclaje_dimensionar")
+                ? connections::ConnectionsEngine::dimensionar_placa_anclaje(obra_, pl, last_solver_summary_)
+                : connections::ConnectionsEngine::comprobar_placa_anclaje(obra_, pl, last_solver_summary_);
+            if (r.cumple_global) {
+                ++cumplen;
+            }
+        }
+        status_bar_text_ = "Placas de anclaje procesadas: " + std::to_string(cumplen) + "/" +
+                           std::to_string(last_baseplates_.size()) + " cumplen todas las comprobaciones ELU.";
+        return true;
+    }
+    if (command_id == "ued_generar" || command_id == "uaut_analizar" || command_id == "uniones_ed_calc" ||
+        command_id == "ued_nueva" || command_id == "ued_editar" || command_id == "uaut_consulta_uniones" ||
+        command_id == "uaut_consulta_uniones_sin_calculo" || command_id == "ued_analisis_rigidez_rotacional" ||
+        command_id == "uaut_analisis_rigidez_rotacional" || command_id == "ued_agrupar" ||
+        command_id == "ued_desagrupar" || command_id == "ued_bloquear" || command_id == "ued_desbloquear" ||
+        command_id == "uaut_consultar_incidencias" || command_id == "uaut_opcs_calculo") {
+        if (last_solver_summary_.resultados_hipotesis.empty() && !obra_.estructura().barras.empty()) {
+            last_solver_summary_ = solver::SolverEngine::analyze_linear_static(obra_);
+        }
+        if (last_connections_.empty() || command_id == "ued_generar" || command_id == "uaut_analizar" || command_id == "uniones_ed_calc") {
+            last_connections_ = connections::ConnectionsEngine::detectar_y_generar_uniones_obra(obra_, last_solver_summary_);
+        }
+        if (command_id == "ued_analisis_rigidez_rotacional" || command_id == "uaut_analisis_rigidez_rotacional") {
+            const auto n_act = connections::ConnectionsEngine::aplicar_rigideces_rotacionales_propuestas_a_obra(obra_, last_connections_);
+            status_bar_text_ = "Rigideces rotacionales Sj aplicadas a " + std::to_string(n_act) + " extremos de piezas.";
+            return true;
+        }
+        if (command_id == "ued_agrupar") {
+            const auto n_grp = connections::ConnectionsEngine::agrupar_uniones_equivalentes(last_connections_);
+            status_bar_text_ = "Uniones agrupadas en " + std::to_string(n_grp) + " tipos equivalentes.";
+            return true;
+        }
+        std::size_t cumplen = 0;
+        for (const auto& u : last_connections_) {
+            if (u.cumple_global) {
+                ++cumplen;
+            }
+        }
+        status_bar_text_ = "Uniones estructurales dimensionadas: " + std::to_string(cumplen) + "/" +
+                           std::to_string(last_connections_.size()) + " nudos resueltos satisfactoriamente.";
+        return true;
+    }
+
     if (item->kind == RibbonButtonKind::ReceptorOpcion) {
         status_bar_text_ = "Herramienta activa: " + item->label + " [" + item->id + "]";
     } else {

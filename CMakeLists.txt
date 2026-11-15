@@ -94,7 +94,7 @@ target_link_libraries(cypeclon_solver PUBLIC cypeclon_core cypeclon_units cypecl
 add_library(cypeclon_connections STATIC
     src/connections/connections_engine.cpp
 )
-target_link_libraries(cypeclon_connections PUBLIC cypeclon_core cypeclon_model cypeclon_codes)
+target_link_libraries(cypeclon_connections PUBLIC cypeclon_core cypeclon_model cypeclon_codes cypeclon_solver)
 
 add_library(cypeclon_foundation STATIC
     src/foundation/foundation_engine.cpp
@@ -151,6 +151,7 @@ add_executable(cypeclon_core_tests
     tests/test_solver_phase8.cpp
     tests/test_design_phase9.cpp
     tests/test_results_phase10.cpp
+    tests/test_connections_phase11.cpp
 )
 target_link_libraries(cypeclon_core_tests PRIVATE
     cypeclon_gui

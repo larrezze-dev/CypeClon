@@ -3,6 +3,7 @@
 #include "cad/cad_engine.hpp"
 #include "cad/results_visualization_engine.hpp"
 #include "codes/design_check_engine.hpp"
+#include "connections/connections_engine.hpp"
 #include "gui/docking_system.hpp"
 #include "gui/ribbon_catalog.hpp"
 #include "gui/theme_palette.hpp"
@@ -119,6 +120,8 @@ public:
     const cad::MapaIsovaloresLamina3d& last_shell_isovalues() const noexcept { return last_shell_isovalues_; }
     const std::vector<cad::VectorReaccionApoyo3d>& last_support_reactions() const noexcept { return last_support_reactions_; }
     const std::vector<cad::ColorAprovechamientoBarra3d>& last_utilization_colors() const noexcept { return last_utilization_colors_; }
+    const std::vector<connections::PlacaAnclaje3d>& last_baseplates() const noexcept { return last_baseplates_; }
+    const std::vector<connections::UnionEstructural3d>& last_connections() const noexcept { return last_connections_; }
 
     std::string window_title() const;
     int run_headless_self_check() const;
@@ -135,6 +138,8 @@ private:
     cad::MapaIsovaloresLamina3d last_shell_isovalues_{};
     std::vector<cad::VectorReaccionApoyo3d> last_support_reactions_{};
     std::vector<cad::ColorAprovechamientoBarra3d> last_utilization_colors_{};
+    std::vector<connections::PlacaAnclaje3d> last_baseplates_{};
+    std::vector<connections::UnionEstructural3d> last_connections_{};
     ThemePalette palette_{};
     DockingSystem docking_{};
     RibbonCatalog ribbon_{true};
