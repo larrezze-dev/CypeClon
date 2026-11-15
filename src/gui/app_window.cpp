@@ -381,6 +381,8 @@ bool AppWindow::execute_command(std::string_view command_id) {
             last_solver_summary_ = solver::SolverEngine::analyze_linear_static(obra_);
         }
         last_design_summary_ = codes::MemberDesignEngine::comprobar_todas_las_barras(obra_, last_solver_summary_);
+        last_utilization_colors_ = cad::ResultsVisualizationEngine::generar_mapa_colores_aprovechamiento_barras(
+            obra_, last_design_summary_);
         status_bar_text_ = "Comprobación de barras completada: " +
                            std::to_string(last_design_summary_.barras_que_cumplen) + "/" +
                            std::to_string(last_design_summary_.comprobaciones_barras.size()) +
@@ -458,6 +460,66 @@ bool AppWindow::execute_command(std::string_view command_id) {
         }
         status_bar_text_ = bloq ? "Armaduras de pórticos de vigas bloqueadas."
                                 : "Armaduras de pórticos de vigas desbloqueadas.";
+        return true;
+    }
+
+    // Comandos de Fase 10 (Consulta Gráfica de Resultados en Estructura 3D — P-11.1 / T-016)
+    if (command_id == "Calculo_Desplazamientos" || command_id == "PO_Desplazamientos" ||
+        command_id == "Calculo_ModosVibracion" || command_id == "Calculo_ModosPandeo") {
+        if (last_solver_summary_.resultados_hipotesis.empty() && !obra_.estructura().barras.empty()) {
+            last_solver_summary_ = solver::SolverEngine::analyze_linear_static(obra_);
+        }
+        auto origen = cad::ModoOrigenDeformada::HipotesisSimple;
+        if (command_id == "Calculo_ModosVibracion") {
+            if (!last_solver_summary_.analisis_modal.has_value()) {
+                last_solver_summary_.analisis_modal = solver::SolverEngine::analyze_modal_spectral(
+                    obra_, obra_.datos_generales().modos_vibracion_sismo);
+            }
+            origen = cad::ModoOrigenDeformada::ModoVibracionSismico;
+        } else if (command_id == "Calculo_ModosPandeo") {
+            if (!last_solver_summary_.analisis_pandeo_global.has_value()) {
+                last_solver_summary_.analisis_pandeo_global = solver::SolverEngine::analyze_global_buckling(obra_, {{1, 1.0}});
+            }
+            origen = cad::ModoOrigenDeformada::ModoPandeoGlobal;
+        }
+        last_deformed_scene_ = cad::ResultsVisualizationEngine::generar_deformada_3d(
+            obra_, last_solver_summary_, origen, 1);
+        status_bar_text_ = "Deformada 3D generada (" + last_deformed_scene_.titulo_caso +
+                           ", u_max = " + std::to_string(last_deformed_scene_.desplazamiento_maximo_mm) + " mm).";
+        return true;
+    }
+    if (command_id == "Calculo_Reacciones" || command_id == "PO_Reacciones") {
+        if (last_solver_summary_.resultados_hipotesis.empty() && !obra_.estructura().barras.empty()) {
+            last_solver_summary_ = solver::SolverEngine::analyze_linear_static(obra_);
+        }
+        last_support_reactions_ = cad::ResultsVisualizationEngine::generar_vectores_reacciones_apoyos(
+            obra_, last_solver_summary_, 1, false);
+        status_bar_text_ = "Consulta gráfica de reacciones en apoyos: " +
+                           std::to_string(last_support_reactions_.size()) + " apoyos con reacción.";
+        return true;
+    }
+    if (command_id == "Calculo_esfuerzos" || command_id == "PO_Esfuerzos") {
+        if (last_solver_summary_.resultados_hipotesis.empty() && !obra_.estructura().barras.empty()) {
+            last_solver_summary_ = solver::SolverEngine::analyze_linear_static(obra_);
+        }
+        last_bar_diagrams_ = cad::ResultsVisualizationEngine::generar_diagramas_esfuerzos_barras(
+            obra_, last_solver_summary_, cad::ComponenteEsfuerzoBarra::Flector_My, true);
+        status_bar_text_ = "Diagramas 3D de esfuerzos y envolventes en barras generados (" +
+                           std::to_string(last_bar_diagrams_.size()) + " barras).";
+        return true;
+    }
+    if (command_id == "Calculo_esfuerzos3D" || command_id == "PO_esfuerzos3D") {
+        if (last_solver_summary_.resultados_hipotesis.empty() &&
+            (!obra_.estructura().barras.empty() || !obra_.estructura().laminas.empty())) {
+            last_solver_summary_ = solver::SolverEngine::analyze_linear_static(obra_);
+        }
+        last_deformed_scene_ = cad::ResultsVisualizationEngine::generar_deformada_3d(
+            obra_, last_solver_summary_, cad::ModoOrigenDeformada::HipotesisSimple, 1);
+        last_shell_isovalues_ = cad::ResultsVisualizationEngine::generar_mapa_isovalores_laminas(
+            obra_, last_solver_summary_, cad::MagnitudIsovalorLamina::Tension_VonMises_Max, 1, false, true);
+        status_bar_text_ = "Vista 3D de Isovalores y Deformada generada (" +
+                           std::to_string(last_shell_isovalues_.triangulos.size()) + " triángulos, " +
+                           std::to_string(last_shell_isovalues_.isolineas.size()) + " isolíneas).";
         return true;
     }
 

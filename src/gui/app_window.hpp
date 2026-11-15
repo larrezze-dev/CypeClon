@@ -1,6 +1,7 @@
 #pragma once
 
 #include "cad/cad_engine.hpp"
+#include "cad/results_visualization_engine.hpp"
 #include "codes/design_check_engine.hpp"
 #include "gui/docking_system.hpp"
 #include "gui/ribbon_catalog.hpp"
@@ -113,6 +114,11 @@ public:
     const std::string& status_bar_text() const noexcept { return status_bar_text_; }
     const solver::SolverSummary& last_solver_summary() const noexcept { return last_solver_summary_; }
     const codes::ResumenComprobacionObra& last_design_summary() const noexcept { return last_design_summary_; }
+    const cad::EscenaDeformada3d& last_deformed_scene() const noexcept { return last_deformed_scene_; }
+    const std::vector<cad::DiagramaEsfuerzoBarra3d>& last_bar_diagrams() const noexcept { return last_bar_diagrams_; }
+    const cad::MapaIsovaloresLamina3d& last_shell_isovalues() const noexcept { return last_shell_isovalues_; }
+    const std::vector<cad::VectorReaccionApoyo3d>& last_support_reactions() const noexcept { return last_support_reactions_; }
+    const std::vector<cad::ColorAprovechamientoBarra3d>& last_utilization_colors() const noexcept { return last_utilization_colors_; }
 
     std::string window_title() const;
     int run_headless_self_check() const;
@@ -124,6 +130,11 @@ private:
     model::Obra obra_{};
     solver::SolverSummary last_solver_summary_{};
     codes::ResumenComprobacionObra last_design_summary_{};
+    cad::EscenaDeformada3d last_deformed_scene_{};
+    std::vector<cad::DiagramaEsfuerzoBarra3d> last_bar_diagrams_{};
+    cad::MapaIsovaloresLamina3d last_shell_isovalues_{};
+    std::vector<cad::VectorReaccionApoyo3d> last_support_reactions_{};
+    std::vector<cad::ColorAprovechamientoBarra3d> last_utilization_colors_{};
     ThemePalette palette_{};
     DockingSystem docking_{};
     RibbonCatalog ribbon_{true};

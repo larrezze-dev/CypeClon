@@ -5,7 +5,7 @@
 #include <iostream>
 #include <stdexcept>
 
-// Declaraciones de suites de prueba de Fases 1 a 9
+// Declaraciones de suites de prueba de Fases 1 a 10
 void run_math_tests();
 void run_units_tests();
 void run_io_undoredo_tests();
@@ -16,6 +16,7 @@ void run_structure_phase5_tests();
 void run_shells_loads_phase6_7_tests();
 void run_solver_phase8_tests();
 void run_design_phase9_tests();
+void run_results_phase10_tests();
 
 namespace {
 
@@ -109,6 +110,9 @@ int main() {
     run_design_phase9_tests();
     std::cout << "[PASS] Fase 9 Comprobacion ELU/ELS/Fuego, Dimensionamiento Optimo y Editores H.A.: compsec + cspncomp + normamet + perfil2 + gestcomp + rstfuego + pilares + pilararm + visesfpil + porvigas + seccviga + comphorm" << std::endl;
 
-    std::cout << "=== TODAS LAS PRUEBAS DE FASES 1 A 9 SUPERADAS CON EXITO ===" << std::endl;
+    run_results_phase10_tests();
+    std::cout << "[PASS] Fase 10 Consulta Grafica de Resultados 3D (Deformada, Animacion, Diagramas, Cursores, Isovalores, Isolineas, Reacciones y Aprovechamiento): visesf3d + isolin + modanres3d" << std::endl;
+
+    std::cout << "=== TODAS LAS PRUEBAS DE FASES 1 A 10 SUPERADAS CON EXITO ===" << std::endl;
     return 0;
 }
