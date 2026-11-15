@@ -9,6 +9,7 @@
 #include "gui/ribbon_catalog.hpp"
 #include "gui/theme_palette.hpp"
 #include "gui/welcome_and_dialogs.hpp"
+#include "io/reports_drawings_bim_engine.hpp"
 #include "model/obra.hpp"
 #include "solver/solver_engine.hpp"
 
@@ -125,6 +126,8 @@ public:
     const std::vector<connections::UnionEstructural3d>& last_connections() const noexcept { return last_connections_; }
     const foundation::ModeloCompletoCimentacion& last_foundation_model() const noexcept { return last_foundation_model_; }
     foundation::ModeloCompletoCimentacion& last_foundation_model_mut() noexcept { return last_foundation_model_; }
+    const io::DocumentoListadoObra& last_report_document() const noexcept { return last_report_doc_; }
+    const std::string& last_exported_payload() const noexcept { return last_exported_payload_; }
 
     std::string window_title() const;
     int run_headless_self_check() const;
@@ -144,6 +147,8 @@ private:
     std::vector<connections::PlacaAnclaje3d> last_baseplates_{};
     std::vector<connections::UnionEstructural3d> last_connections_{};
     foundation::ModeloCompletoCimentacion last_foundation_model_{};
+    io::DocumentoListadoObra last_report_doc_{};
+    std::string last_exported_payload_{};
     ThemePalette palette_{};
     DockingSystem docking_{};
     RibbonCatalog ribbon_{true};

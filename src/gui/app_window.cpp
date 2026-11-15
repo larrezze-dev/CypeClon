@@ -191,6 +191,24 @@ bool AppWindow::execute_command(std::string_view command_id) {
         status_bar_text_ = "Estados límite (combinaciones E.L.U. / E.L.S.)";
         return true;
     }
+    if (command_id == "Ayuda_MemoriaCalculo" || command_id == "Archivo_Listados") {
+        last_report_doc_ = io::ReportsDrawingsBimEngine::generate_project_report(
+            obra_, &last_solver_summary_, &last_design_summary_,
+            &last_baseplates_, &last_connections_, &last_foundation_model_);
+        last_exported_payload_ = io::ReportsDrawingsBimEngine::export_report(
+            last_report_doc_, io::FormatoExportacionListado::HTML);
+        status_bar_text_ = "Listado y Memoria de Cálculo generados (" +
+                           std::to_string(last_report_doc_.capitulos.size()) + " capítulos).";
+        return true;
+    }
+    if (command_id == "Archivo_Planos") {
+        const auto sheet = io::ReportsDrawingsBimEngine::compose_drawing_sheet(
+            obra_, io::TipoPlanoObra::Estructura3D, io::FormatoHojaPlano::ISO_A1, 100.0,
+            &last_baseplates_, &last_connections_, &last_foundation_model_, {"EAC001", "CSZ002"});
+        last_exported_payload_ = io::ReportsDrawingsBimEngine::export_drawing_to_dxf(sheet);
+        status_bar_text_ = "Plano de obra generado en DXF (" + std::to_string(sheet.lineas.size()) + " líneas).";
+        return true;
+    }
 
     auto* item = ribbon_.find_command_mut(command_id);
     if (!item || !item->enabled) {
@@ -623,6 +641,50 @@ bool AppWindow::execute_command(std::string_view command_id) {
         }
         status_bar_text_ = "Generadas " + std::to_string(last_foundation_model_.zapatas.size()) +
                            " zapatas y " + std::to_string(last_foundation_model_.vigas.size()) + " vigas de cimentación.";
+        return true;
+    }
+
+    // -------------------------------------------------------------------------
+    // Comandos de Fase 13 (P-14.1, P-14.2, P-14.3 / T-019): Listados, Planos e Interoperabilidad BIM/CAD
+    // -------------------------------------------------------------------------
+    if (command_id == "Exportacion_A_Tekla" || command_id == "Exportacion_A_CIS2" ||
+        command_id == "Exportacion_A_CSV" || command_id == "exportar_bim" ||
+        command_id == "vincular_bim" || command_id == "Ayuda_MemoriaCalculo") {
+        last_report_doc_ = io::ReportsDrawingsBimEngine::generate_project_report(
+            obra_, &last_solver_summary_, &last_design_summary_,
+            &last_baseplates_, &last_connections_, &last_foundation_model_);
+        if (command_id == "Exportacion_A_Tekla") {
+            last_exported_payload_ = io::ReportsDrawingsBimEngine::export_to_tekla(
+                obra_, &last_connections_, &last_baseplates_);
+            status_bar_text_ = "Exportación a Tekla Structures generada (" +
+                               std::to_string(last_exported_payload_.size()) + " bytes).";
+            return true;
+        }
+        if (command_id == "Exportacion_A_CIS2") {
+            last_exported_payload_ = io::ReportsDrawingsBimEngine::export_to_cis2_step(
+                obra_, &last_connections_, &last_baseplates_);
+            status_bar_text_ = "Exportación a CIS/2 (STEP ISO-10303-21) generada (" +
+                               std::to_string(last_exported_payload_.size()) + " bytes).";
+            return true;
+        }
+        if (command_id == "Exportacion_A_CSV") {
+            last_exported_payload_ = io::ReportsDrawingsBimEngine::export_report(
+                last_report_doc_, io::FormatoExportacionListado::CSV);
+            status_bar_text_ = "Exportación a CSV completada (" +
+                               std::to_string(last_exported_payload_.size()) + " bytes).";
+            return true;
+        }
+        if (command_id == "exportar_bim" || command_id == "vincular_bim") {
+            last_exported_payload_ = io::ReportsDrawingsBimEngine::export_to_ifc(
+                obra_, io::VersionEsquemaIfc::IFC4_ADD2_TC1, &last_foundation_model_, &last_baseplates_);
+            status_bar_text_ = "Exportación BIM IFC4 + glTF 2.0 completada (" +
+                               std::to_string(last_exported_payload_.size()) + " bytes).";
+            return true;
+        }
+        last_exported_payload_ = io::ReportsDrawingsBimEngine::export_report(
+            last_report_doc_, io::FormatoExportacionListado::HTML);
+        status_bar_text_ = "Listado y Memoria de Cálculo generados (" +
+                           std::to_string(last_report_doc_.capitulos.size()) + " capítulos).";
         return true;
     }
 

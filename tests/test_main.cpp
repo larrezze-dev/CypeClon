@@ -19,6 +19,7 @@ void run_design_phase9_tests();
 void run_results_phase10_tests();
 void run_connections_phase11_tests();
 void run_foundation_phase12_tests();
+void run_reports_bim_phase13_tests();
 
 namespace {
 
@@ -121,6 +122,9 @@ int main() {
     run_foundation_phase12_tests();
     std::cout << "[PASS] Fase 12 Solapa Cimentacion (Zapatas H.A./H.M., Encepados, Pilotes, Micropilotes, Vigas de Atado y Centradoras, Limites y Despiece 3D): planocim + arranque + zptipos + encepado + pilotes + micropilotes + vigacim" << std::endl;
 
-    std::cout << "=== TODAS LAS PRUEBAS DE FASES 1 A 12 SUPERADAS CON EXITO ===" << std::endl;
+    run_reports_bim_phase13_tests();
+    std::cout << "[PASS] Fase 13 Listados, Mediciones, Planos 2D/3D, Detalles Constructivos e Interoperabilidad BIM/CAD (PDF/DOCX/RTF/HTML/TXT/CSV, DXF/SVG, IFC2x3/IFC4, glTF 2.0, CIS/2, Tekla, TecnoMETAL): listados + plalist + cypedocu + mppzperf + csvlib + enplanos + dibbase + undxf + imporstr + bimifc + cytekla + cypecis2 + cytecnometal" << std::endl;
+
+    std::cout << "=== TODAS LAS PRUEBAS DE FASES 1 A 13 (100% DEL PROYECTO) SUPERADAS CON EXITO ===" << std::endl;
     return 0;
 }

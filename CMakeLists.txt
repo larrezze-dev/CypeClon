@@ -98,6 +98,7 @@ target_link_libraries(cypeclon_connections PUBLIC cypeclon_core cypeclon_model c
 
 add_library(cypeclon_foundation STATIC
     src/foundation/foundation_engine.cpp
+    src/io/reports_drawings_bim_engine.cpp
 )
 target_link_libraries(cypeclon_foundation PUBLIC cypeclon_core cypeclon_model cypeclon_codes cypeclon_solver cypeclon_connections)
 
@@ -153,6 +154,7 @@ add_executable(cypeclon_core_tests
     tests/test_results_phase10.cpp
     tests/test_connections_phase11.cpp
     tests/test_foundation_phase12.cpp
+    tests/test_reports_bim_phase13.cpp
 )
 target_link_libraries(cypeclon_core_tests PRIVATE
     cypeclon_gui
