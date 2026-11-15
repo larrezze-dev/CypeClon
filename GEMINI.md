@@ -29,3 +29,13 @@ Tras evaluar el programa fuente del clon, aconsejame entre C++ o Rust.
 
 ## Calidad
 Asegúrate de que todas las funciones son clonadas, excepto si el usuario te pide explicitamente excluir determinadas funciones o características
+
+## Control de tareas
+
+Elabora una lista desglosada de tareas atómicas basada en el plan de implementación. Crea el archivo .tasks.md como referencia para el control de tareas. Cada vez que realices total o parcialmente una tarea, o altere tareas ya realizadas, actualiza el estado de la tarea en el archivo .tasks.md. En la columna "Comentarios" del archivo .tasks.md, anota que has realizado la tarea y cualquier comentario relevante.
+
+Caso una tarea no pueda ser realizada debido a dependencia de features aun no desarrolladas o cualquier otro motivo, en el archivo .ticktets.md crea un "Ticket" asociando la tarea pendiente a su tarea complementaria futura, de forma que una tarea pendiente pueda ser finalizada en el momento correcto.
+
+Serás el único responsable de marcar una tarea como realizada, pendiente o en marcha. Las tareas pendientes se marcarán con "[ ]", las tareas finalizadas con "[x]" y las tareas en marcha con "[o]"
+
+Para que el usuario pueda realizar un seguimiento proactivo del desarrollo del proyecto crea un informe en .tasks.html con un dashboard indicativo del avance del desarrollo desde de diversas perspectivas. Actualizalo al finalizar cada tarea atómica.

@@ -18,6 +18,7 @@ void run_solver_phase8_tests();
 void run_design_phase9_tests();
 void run_results_phase10_tests();
 void run_connections_phase11_tests();
+void run_foundation_phase12_tests();
 
 namespace {
 
@@ -117,6 +118,9 @@ int main() {
     run_connections_phase11_tests();
     std::cout << "[PASS] Fase 11 Uniones Soldadas y Atornilladas + Placas de Anclaje: placancl + pneleme + uniones + unionbase + unionbase2 + bimjsunion" << std::endl;
 
-    std::cout << "=== TODAS LAS PRUEBAS DE FASES 1 A 11 SUPERADAS CON EXITO ===" << std::endl;
+    run_foundation_phase12_tests();
+    std::cout << "[PASS] Fase 12 Solapa Cimentacion (Zapatas H.A./H.M., Encepados, Pilotes, Micropilotes, Vigas de Atado y Centradoras, Limites y Despiece 3D): planocim + arranque + zptipos + encepado + pilotes + micropilotes + vigacim" << std::endl;
+
+    std::cout << "=== TODAS LAS PRUEBAS DE FASES 1 A 12 SUPERADAS CON EXITO ===" << std::endl;
     return 0;
 }

@@ -2355,3 +2355,4 @@ ResumenEditorVanoViga ReinforcedConcreteEditorEngine::actualizar_armado_manual_v
 }
 
 } // namespace cypeclon::codes
+

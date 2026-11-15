@@ -207,19 +207,6 @@ bool AppWindow::execute_command(std::string_view command_id) {
         active_receptor_id_ = item->id;
     }
 
-    if (command_id == "generar_zapatas_y_vigas") {
-        // En Cimentación: genera zapatas de hormigón armado en todos los nudos con vinculación exterior
-        std::size_t creadas = 0;
-        for (const auto& n : obra_.estructura().nudos) {
-            if (n.vinc_ext != model::VinculacionExterior::Libre) {
-                obra_.add_elemento_cimentacion(model::TipoElementoCimentacion::ZapataHormigonArmado, n.id);
-                ++creadas;
-            }
-        }
-        status_bar_text_ = "Generar zapatas y vigas: " + std::to_string(creadas) + " elementos generados.";
-        return true;
-    }
-
     // Comandos de Gestión de Ventanas MDI (Pestaña Ventana — P-04.1 / dispoMDI)
     if (command_id == "Ventana_AbrirNueva") {
         const auto id = mdi_manager_.create_view_3d("Vista 3D (" + std::to_string(mdi_manager_.views().size() + 1) + ")");
@@ -267,7 +254,8 @@ bool AppWindow::execute_command(std::string_view command_id) {
     }
 
     // Comandos de Vista 3D y Planos/Niveles/Cotas (P-04.1 / P-04.2)
-    if (command_id == "Obra_Vista3D" || command_id == "Obra_Vista3D_vista" || command_id == "vista_3D") {
+    if (command_id == "Obra_Vista3D" || command_id == "Obra_Vista3D_vista" ||
+        (command_id == "vista_3D" && obra_.solapa_activa() == model::SolapaActiva::Estructura)) {
         if (auto* av = mdi_manager_.active_view_mut()) {
             av->camera.zoom_extents(obra_.bounding_box(), av->rect.width, av->rect.height);
         }
@@ -586,6 +574,55 @@ bool AppWindow::execute_command(std::string_view command_id) {
         }
         status_bar_text_ = "Uniones estructurales dimensionadas: " + std::to_string(cumplen) + "/" +
                            std::to_string(last_connections_.size()) + " nudos resueltos satisfactoriamente.";
+        return true;
+    }
+
+    // -------------------------------------------------------------------------
+    // Comandos de Fase 12 (P-13.1 / T-018): Solapa Cimentación (`planocim`, `arranque`, `zptipos`, `encepado`, `vigacim`)
+    // -------------------------------------------------------------------------
+    if (command_id == "generar_zapatas_y_vigas" || command_id == "eliminar_solapes" ||
+        (obra_.solapa_activa() == model::SolapaActiva::Cimentacion &&
+         (command_id == "comprobar" || command_id == "dimensionar" || command_id == "vista_3D"))) {
+        if (last_solver_summary_.resultados_hipotesis.empty() && !obra_.estructura().barras.empty()) {
+            last_solver_summary_ = solver::SolverEngine::analyze_linear_static(obra_);
+        }
+        if (command_id == "generar_zapatas_y_vigas" ||
+            (last_foundation_model_.zapatas.empty() && last_foundation_model_.encepados.empty())) {
+            last_foundation_model_ = foundation::FoundationEngine::generate_automatic_foundation(
+                obra_, &last_solver_summary_, false, true);
+        }
+        if (command_id == "eliminar_solapes") {
+            const auto unidos = foundation::FoundationEngine::resolve_overlapping_footings(last_foundation_model_);
+            foundation::FoundationEngine::check_all_foundation(last_foundation_model_, obra_.datos_generales());
+            status_bar_text_ = "Eliminación de solapes en cimentación: " + std::to_string(unidos) +
+                               " zapatas combinadas.";
+            return true;
+        }
+        if (command_id == "comprobar") {
+            foundation::FoundationEngine::check_all_foundation(last_foundation_model_, obra_.datos_generales());
+            status_bar_text_ = "Comprobación de cimentación completada (" +
+                               std::to_string(last_foundation_model_.resultados_zapatas.size()) + " zapatas, " +
+                               std::to_string(last_foundation_model_.resultados_encepados.size()) + " encepados, " +
+                               std::to_string(last_foundation_model_.resultados_vigas.size()) + " vigas).";
+            return true;
+        }
+        if (command_id == "dimensionar") {
+            foundation::FoundationEngine::design_all_foundation(obra_, last_foundation_model_);
+            status_bar_text_ = "Dimensionamiento completo de cimentación: V_horm = " +
+                               std::to_string(last_foundation_model_.medicion.volumen_hormigon_total_m3) +
+                               " m3, Acero = " +
+                               std::to_string(last_foundation_model_.medicion.peso_acero_total_con_mermas_kg) + " kg.";
+            return true;
+        }
+        if (command_id == "vista_3D") {
+            const auto scene3d = foundation::FoundationEngine::build_3d_scene(last_foundation_model_);
+            status_bar_text_ = "Vista 3D de cimentación generada (" +
+                               std::to_string(scene3d.bloques_hormigon.size()) + " bloques, " +
+                               std::to_string(scene3d.barras_armadura_3d.size()) + " barras de armado 3D).";
+            return true;
+        }
+        status_bar_text_ = "Generadas " + std::to_string(last_foundation_model_.zapatas.size()) +
+                           " zapatas y " + std::to_string(last_foundation_model_.vigas.size()) + " vigas de cimentación.";
         return true;
     }
 
